@@ -1,0 +1,132 @@
+output: /databricks/spark/sql/mllib-perf-ci
+timeoutSeconds: 1000 # This limit is for all benchmarks and should be bumped as more are added.
+common:
+  numExamples: 1000000
+  numTestExamples: 1000000
+  numFeatures: 4000
+  numPartitions: 64
+  randomSeed: [1, 1, 1] # Rerun 3 times to accumulate some info
+benchmarks:
+  - name: classification.DecisionTreeClassification
+    params:
+      depth: [5, 10]
+      numClasses: 4
+  - name: classification.GBTClassification
+    params:
+      numFeatures: 3000
+      depth: 5
+      numClasses: 4
+      maxIter: 10
+  - name: classification.RandomForestClassification
+    params:
+      depth: 10
+      numClasses: 4
+      maxIter: 200 # number of trees
+  - name: classification.LogisticRegression
+    params:
+      regParam: 0.01
+      tol: 0.0
+      maxIter: 20
+  - name: classification.LinearSVC
+    params:
+      regParam: 0.01
+      tol: 0
+      maxIter: 20
+  - name: classification.NaiveBayes
+    params:
+      numFeatures: 5000
+      numClasses: 2
+      smoothing: 1.0
+  - name: clustering.GaussianMixture
+    params:
+      numExamples: 100000
+      numTestExamples: 100000
+      numFeatures: 1000
+      k: 10
+      maxIter: 10
+      tol: 0.01
+  - name: clustering.KMeans
+    params:
+      k: 50
+      maxIter: 20
+      tol: 1e-3
+  - name: clustering.LDA
+    params:
+      docLength: 100
+      vocabSize: 5000
+      k: 60
+      maxIter: 20
+      optimizer:
+        - em
+        - online
+  - name: feature.BucketedRandomProjectionLSH
+    params:
+      numHashTables: 20
+  - name: feature.Bucketizer
+    params:
+      bucketizerNumBuckets: 20
+  - name: feature.HashingTF
+    params:
+      docLength: 2000
+      vocabSize: 200
+  - name: feature.MinHashLSH
+    params:
+      numFeatures: 10000
+      numHashTables: 10
+  - name: feature.OneHotEncoder
+    params:
+      featureArity: 10000
+  - name: feature.StringIndexer
+    params:
+      vocabSize: 10000
+  - name: feature.Tokenizer
+    params:
+      vocabSize: 2000
+      docLength: 10000
+  - name: feature.VectorAssembler
+    params:
+      numInputCols: 20
+  - name: feature.VectorSlicer
+    params:
+      numFeatures: 5000
+  - name: feature.Word2Vec
+    params:
+      numExamples: 10000
+      vocabSize: 100
+      docLength: 1000
+      numSynonymsToFind: 3
+  - name: fpm.FPGrowth
+    params:
+      numItems: 10000
+      itemSetSize: [4, 10]
+  - name: recommendation.ALS
+    params:
+      numExamples: 50000000
+      numTestExamples: 50000000
+      numUsers: 6000000
+      numItems: 6000000
+      regParam: 0.01
+      rank: 10
+      maxIter: 10
+  - name: regression.DecisionTreeRegression
+    params:
+      depth: [5, 10]
+  - name: regression.GLMRegression
+    params:
+      numExamples: 500000
+      numTestExamples: 500000
+      numFeatures: 1000
+      link: log
+      family: gaussian
+      tol: 0.0
+      maxIter: 10
+      regParam: 0.1
+  - name: regression.LinearRegression
+    params:
+      regParam: 0.01
+      tol: 0.0
+      maxIter: 20
+  - name: regression.RandomForestRegression
+    params:
+      depth: 10
+      maxIter: 4
