@@ -14,7 +14,7 @@ case class GenBenchmarkConfig
   overwrite: Boolean = false,
 )
 
-class MySetBenchmark {
+object MySetBenchmark {
 
   val format = "Parquet"
   val TPCDSUseLegacyOptions = false
