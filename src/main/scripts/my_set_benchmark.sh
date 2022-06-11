@@ -18,7 +18,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --driver-java-options "-Dlog4j.configuration=file:$lpath" \
 --conf "spark.executor.extraJavaOptions=-Dlog4j.configuration=file:log4j.properties" \
 --files "$lpath" \
---jars examples/jars/scopt_2.12-3.7.1.jar \
+--jars ~/spark/examples/jars/scopt_2.12-3.7.1.jar \
 /opt/hex_users/$USER/chenghao/spark-sql-perf/target/scala-2.12/spark-sql-perf_2.12-0.5.1-SNAPSHOT.jar \
 -b $bm -d /mnt/disk7/chenghao-dataset -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark
 
