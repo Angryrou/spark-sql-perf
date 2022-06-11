@@ -3,7 +3,7 @@ sf=$2
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.properties
 
-./bin/spark-submit \
+~/spark/bin/spark-submit \
 --class com.databricks.spark.sql.perf.MySetBenchmark \
 --name $bm_$sf \
 --master yarn \
