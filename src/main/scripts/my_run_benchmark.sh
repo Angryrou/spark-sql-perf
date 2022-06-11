@@ -17,7 +17,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 
 ~/spark/bin/spark-submit \
 --class com.databricks.spark.sql.perf.MyRunBenchmark \
---name ${bm}_${sf}_run \
+--name ${bm}_${sf}_run_para=${para} \
 --master yarn \
 --deploy-mode client \
 --conf spark.executorEnv.JAVA_HOME=$jpath \
