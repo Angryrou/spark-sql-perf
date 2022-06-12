@@ -15,6 +15,10 @@ ninsts=35 # 7x5
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.properties
 
+# default
+# spark.sql.files.maxPartitionBytes=128M
+# spark.sql.shuffle.partitions=200
+
 ~/spark/bin/spark-submit \
 --class com.databricks.spark.sql.perf.MyRunBenchmark \
 --name ${bm}_${sf}_run_para=${para} \
@@ -23,6 +27,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.executorEnv.JAVA_HOME=$jpath \
 --conf spark.yarn.appMasterEnv.JAVA_HOME=$jpath \
 --conf spark.default.parallelism=$para \
+--conf spark.sql.shuffle.partitions=$para \
 --conf spark.executor.instances=35 \
 --conf spark.executor.cores=${cpe} \
 --conf spark.executor.memory=${mpe}g \
