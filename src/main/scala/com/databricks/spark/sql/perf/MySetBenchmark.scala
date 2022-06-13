@@ -12,6 +12,7 @@ case class GenBenchmarkConfig
   scaleFactor: String = null, // 1
   locationHeader: String = "hdfs://node13-opa:8020/user/spark_benchmark",
   overwrite: Boolean = false,
+  databaseName: String = null
 )
 
 object MySetBenchmark {
@@ -25,12 +26,12 @@ object MySetBenchmark {
   val filterOutNullPartitionValues = false
   val defaultNumPartitions = 100
 
-  def isPartitioned (tables: Tables, tableName: String) : Boolean =
+  def isPartitioned(tables: Tables, tableName: String): Boolean =
     util.Try(tables.tables.find(_.name == tableName).get.partitionColumns.nonEmpty).getOrElse(false)
 
   def time[R](block: => R): R = {
     val t0 = System.currentTimeMillis() //nanoTime()
-    val result = block    // call-by-name
+    val result = block // call-by-name
     val t1 = System.currentTimeMillis() //nanoTime()
     println("Elapsed time: " + (t1 - t0) + "ms")
     result
@@ -92,11 +93,13 @@ object MySetBenchmark {
         )
     }
 
-    val location = s"${config.locationHeader}/${config.benchmarkName.toLowerCase}_sf${config.scaleFactor}/dataset"
+    val databaseName = if (config.databaseName == null) s"${config.benchmarkName.toLowerCase}_${config.scaleFactor}" else config.databaseName
+    val location = s"${config.locationHeader}/${databaseName}/dataset"
     val tableNames = tables.tables.map(_.name)
     val workers = sc.getConf.get("spark.executor.instances").toInt
     val cores = sc.getConf.get("spark.executor.cores").toInt
-    val databaseName = s"${config.benchmarkName.toLowerCase}_${config.scaleFactor}" // name of database to create.
+
+    // name of database to create.
 
     tableNames.foreach { tableName =>
       // generate data
@@ -113,7 +116,7 @@ object MySetBenchmark {
           // this controlls parallelism on datagen and number of writers (# of files for non-partitioned)
           // in general we want many writers to S3, and smaller tasks for large scale factors to avoid OOM and shuffle errors
           numPartitions = if (config.scaleFactor.toInt <= 100 || !isPartitioned(tables, tableName)) (workers * cores)
-                          else (workers * cores * 4))
+          else (workers * cores * 4))
       }
     }
 

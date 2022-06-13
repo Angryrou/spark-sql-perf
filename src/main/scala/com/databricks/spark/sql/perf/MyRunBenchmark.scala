@@ -14,6 +14,7 @@ case class RunBenchmarkConfig
   scaleFactor: String = null, // 1
   locationHeader: String = "hdfs://node13-opa:8020/user/spark_benchmark",
   overwrite: Boolean = false,
+  databaseName: String = null
 )
 
 object MyRunBenchmark {
@@ -61,8 +62,9 @@ object MyRunBenchmark {
       .getOrCreate()
     val sc = spark.sparkContext
 
-    val resultLocation = s"${config.locationHeader}/${config.benchmarkName.toLowerCase}_sf${config.scaleFactor}/results" // place to write results
-    val databaseName = s"${config.benchmarkName.toLowerCase}_${config.scaleFactor}" // name of database to create.
+    val databaseName = if (config.databaseName == null) s"${config.benchmarkName.toLowerCase}_${config.scaleFactor}" else config.databaseName
+    val resultLocation = s"${config.locationHeader}/${databaseName}/results" // place to write results
+//    val databaseName = s"${config.benchmarkName.toLowerCase}_${config.scaleFactor}" // name of database to create.
 
     spark.sql(s"use $databaseName")
 
