@@ -56,6 +56,9 @@ object MySetBenchmark {
       opt[Boolean]('o', "overwrite")
         .action((x, c) => c.copy(overwrite = x))
         .text("overwrite the data that is already there")
+      opt[String]('n', "databaseName")
+        .action((x, c) => c.copy(databaseName = x))
+        .text("customized databaseName")
       help("help")
         .text("prints this usage text")
     }
