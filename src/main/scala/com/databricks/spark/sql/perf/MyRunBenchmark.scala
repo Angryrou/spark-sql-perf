@@ -12,7 +12,6 @@ case class RunBenchmarkConfig
   benchmarkName: String = null, // TPCH / TPCDS
   scaleFactor: String = null, // 1
   locationHeader: String = "hdfs://node13-opa:8020/user/spark_benchmark",
-  overwrite: Boolean = false,
   databaseName: String = null
 )
 
@@ -33,9 +32,6 @@ object MyRunBenchmark {
       opt[String]('l', "locationHeader")
         .action((x, c) => c.copy(locationHeader = x))
         .text("head root directory of location to create data in")
-      opt[Boolean]('o', "overwrite")
-        .action((x, c) => c.copy(overwrite = x))
-        .text("overwrite the data that is already there")
       opt[String]('n', "databaseName")
         .action((x, c) => c.copy(databaseName = x))
         .text("customized databaseName")

@@ -9,7 +9,7 @@ para=$3
 cpe=4 # core per exec
 mpe=32 # mem per exec = 4 core x 8G/core = 32G
 ninsts=35 # 7x5
-spara=200
+spara=420
 
 
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
@@ -32,12 +32,17 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.executor.cores=${cpe} \
 --conf spark.executor.memory=${mpe}g \
 --conf spark.driver.memory=${mpe}g \
+--conf spark.reducer.maxSizeInFlight=256m \
+--conf spark.rpc.askTimeout=12000 \
+--conf spark.shuffle.io.retryWait=60 \
+--conf spark.sql.autoBroadcastJoinThreshold=200m \
 --driver-java-options "-Dlog4j.configuration=file:$lpath" \
+--conf "spark.driver.extraJavaOptions=-Xms20g" \
 --conf "spark.executor.extraJavaOptions=-Dlog4j.configuration=file:log4j.properties" \
 --files "$lpath" \
 --jars ~/spark/examples/jars/scopt_2.12-3.7.1.jar \
 /opt/hex_users/$USER/chenghao/spark-sql-perf/target/scala-2.12/spark-sql-perf_2.12-0.5.1-SNAPSHOT.jar \
--b $bm -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark -n new_${bm}_${sf}
+-b $bm -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark
 
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 20
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 50
