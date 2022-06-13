@@ -15,7 +15,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.executor.cores=4 \
 --conf spark.executor.memory=80g \
 --conf spark.reducer.maxSizeInFlight=256m \
---conf spark.rpc.askTimeout=12000
+--conf spark.rpc.askTimeout=12000 \
 --driver-java-options "-Dlog4j.configuration=file:$lpath" \
 --conf "spark.executor.extraJavaOptions=-Dlog4j.configuration=file:log4j.properties" \
 --files "$lpath" \
