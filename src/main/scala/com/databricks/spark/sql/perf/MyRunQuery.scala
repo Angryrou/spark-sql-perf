@@ -7,7 +7,7 @@ import org.apache.commons.io.IOUtils
 import org.apache.spark.sql.SparkSession
 
 
-case class RunBenchmarkConfig
+case class RunQueryConfig
 (
   benchmarkName: String = null, // TPCH / TPCDS
   scaleFactor: String = null, // 1
@@ -23,7 +23,7 @@ object MyRunQuery {
   val timeout = 24*60*60 // timeout, in seconds.
 
   def main(args: Array[String]): Unit = {
-    val parser = new scopt.OptionParser[RunBenchmarkConfig]("Run-Benchmark-Query") {
+    val parser = new scopt.OptionParser[RunQueryConfig]("Run-Benchmark-Query") {
       opt[String]('b', "benchmark")
         .action { (x, c) => c.copy(benchmarkName = x) }
         .text("the name of the benchmark to run")
@@ -49,7 +49,7 @@ object MyRunQuery {
         .text("prints this usage text")
     }
 
-    parser.parse(args, RunBenchmarkConfig()) match {
+    parser.parse(args, RunQueryConfig()) match {
       case Some(config) =>
         run(config)
       case None =>
@@ -57,7 +57,7 @@ object MyRunQuery {
     }
   }
 
-  def run(config: RunBenchmarkConfig): Unit = {
+  def run(config: RunQueryConfig): Unit = {
     assert(config.benchmarkName == "TPCH" || config.benchmarkName == "TPCDS")
 
     val spark = SparkSession
