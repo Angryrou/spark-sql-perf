@@ -2,7 +2,6 @@ bm=$1
 sf=$2
 para=$3
 
-
 # md values
 # 1 core -> 8G mem
 # 1 stage -> 10-50 instances
@@ -10,6 +9,7 @@ para=$3
 cpe=4 # core per exec
 mpe=32 # mem per exec = 4 core x 8G/core = 32G
 ninsts=35 # 7x5
+spara=200
 
 
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
@@ -27,7 +27,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.executorEnv.JAVA_HOME=$jpath \
 --conf spark.yarn.appMasterEnv.JAVA_HOME=$jpath \
 --conf spark.default.parallelism=$para \
---conf spark.sql.shuffle.partitions=$para \
+--conf spark.sql.shuffle.partitions=$spara \
 --conf spark.executor.instances=35 \
 --conf spark.executor.cores=${cpe} \
 --conf spark.executor.memory=${mpe}g \

@@ -40,26 +40,26 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 /opt/hex_users/$USER/chenghao/spark-sql-perf/target/scala-2.12/spark-sql-perf_2.12-0.5.1-SNAPSHOT.jar \
 -b $bm -q $qname -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark -n new_${bm}_${sf}
 
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 100
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCH 10 20
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCH 10 50
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCH 10 100
 #
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 100
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCH 100 20
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCH 100 50 22
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCH 100 100
 #
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 100
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCH 1000 20
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCH 1000 50
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCH 1000 100
 #
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 10 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 10 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 10 100
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCDS 10 20
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCDS 10 50
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCDS 10 100
 #
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 100
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCDS 100 20
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCDS 100 50
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCDS 100 100
 #
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 100
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCDS 1000 20
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCDS 1000 50
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark_query.sh TPCDS 1000 100
