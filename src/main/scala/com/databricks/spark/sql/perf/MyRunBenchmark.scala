@@ -10,7 +10,6 @@ import org.apache.spark.sql.SparkSession
 case class RunBenchmarkConfig
 (
   benchmarkName: String = null, // TPCH / TPCDS
-  dataGenDir: String = "/mnt/disk7/chenghao-dataset",
   scaleFactor: String = null, // 1
   locationHeader: String = "hdfs://node13-opa:8020/user/spark_benchmark",
   overwrite: Boolean = false,
@@ -23,14 +22,10 @@ object MyRunBenchmark {
   val timeout = 24*60*60 // timeout, in seconds.
 
   def main(args: Array[String]): Unit = {
-    val parser = new scopt.OptionParser[RunBenchmarkConfig]("Gen-Benchmark-data") {
+    val parser = new scopt.OptionParser[RunBenchmarkConfig]("Run-Benchmark-Query") {
       opt[String]('b', "benchmark")
         .action { (x, c) => c.copy(benchmarkName = x) }
         .text("the name of the benchmark to run")
-        .required()
-      opt[String]('d', "dataGenDir")
-        .action { (x, c) => c.copy(dataGenDir = x) }
-        .text("head dir of dsdgen/dbgen")
         .required()
       opt[String]('s', "scaleFactor")
         .action((x, c) => c.copy(scaleFactor = x))
@@ -63,7 +58,6 @@ object MyRunBenchmark {
       .builder()
       .enableHiveSupport()
       .getOrCreate()
-    val sc = spark.sparkContext
 
     val databaseName = if (config.databaseName == null) s"${config.benchmarkName.toLowerCase}_${config.scaleFactor}" else config.databaseName
     val resultLocation = s"${config.locationHeader}/${databaseName}/results" // place to write results

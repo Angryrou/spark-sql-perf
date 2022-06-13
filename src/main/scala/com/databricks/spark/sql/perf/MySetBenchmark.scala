@@ -38,7 +38,7 @@ object MySetBenchmark {
   }
 
   def main(args: Array[String]): Unit = {
-    val parser = new scopt.OptionParser[GenBenchmarkConfig]("Gen-Benchmark-data") {
+    val parser = new scopt.OptionParser[GenBenchmarkConfig]("Gen-Benchmark-Data") {
       opt[String]('b', "benchmark")
         .action { (x, c) => c.copy(benchmarkName = x) }
         .text("the name of the benchmark to run")
