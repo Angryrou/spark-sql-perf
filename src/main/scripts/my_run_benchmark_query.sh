@@ -1,6 +1,7 @@
 bm=$1
 sf=$2
 para=$3
+qname=$4
 
 
 # md values
@@ -20,14 +21,14 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 # spark.sql.shuffle.partitions=200
 
 ~/spark/bin/spark-submit \
---class com.databricks.spark.sql.perf.MyRunBenchmark \
+--class com.databricks.spark.sql.perf.MyRunQuery \
 --name ${bm}_${sf}_run_para=${para} \
 --master yarn \
 --deploy-mode client \
 --conf spark.executorEnv.JAVA_HOME=$jpath \
 --conf spark.yarn.appMasterEnv.JAVA_HOME=$jpath \
 --conf spark.default.parallelism=$para \
---conf spark.sql.shuffle.partitions=$para \
+--conf spark.sql.shuffle.partitions=200 \
 --conf spark.executor.instances=35 \
 --conf spark.executor.cores=${cpe} \
 --conf spark.executor.memory=${mpe}g \
@@ -37,7 +38,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --files "$lpath" \
 --jars ~/spark/examples/jars/scopt_2.12-3.7.1.jar \
 /opt/hex_users/$USER/chenghao/spark-sql-perf/target/scala-2.12/spark-sql-perf_2.12-0.5.1-SNAPSHOT.jar \
--b $bm -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark -n new_${bm}_${sf}
+-b $bm -q $qname -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark -n new_${bm}_${sf}
 
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 20
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 50
