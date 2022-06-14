@@ -25,6 +25,8 @@ object MySetBenchmark {
   val clusterByPartitionColumns = true
   val filterOutNullPartitionValues = false
   val defaultNumPartitions = 100
+  val numPartitioned=10000
+  val numNonpartitioned=10
 
   def isPartitioned(tables: Tables, tableName: String): Boolean =
     util.Try(tables.tables.find(_.name == tableName).get.partitionColumns.nonEmpty).getOrElse(false)
@@ -72,11 +74,14 @@ object MySetBenchmark {
   }
 
   def run(config: GenBenchmarkConfig): Unit = {
+    val sf = config.scaleFactor
+
     val spark = SparkSession
       .builder()
+      .config("spark.sql.shuffle.partitions", if (sf.toInt >= 10000) "20000" else if (sf.toInt >= 1000) "2001" else "200")
+      .config("parquet.memory.pool.ratio", if (sf.toInt >= 10000) "0.1" else if (sf.toInt >= 1000) "0.3" else "0.5")
       .enableHiveSupport()
       .getOrCreate()
-    val sc = spark.sparkContext
 
     val tables = config.benchmarkName match {
       case "TPCDS" => (
@@ -98,33 +103,69 @@ object MySetBenchmark {
 
     val databaseName = if (config.databaseName == null) s"${config.benchmarkName.toLowerCase}_${config.scaleFactor}" else config.databaseName
     val location = s"${config.locationHeader}/${databaseName}/dataset"
-    val tableNames = tables.tables.map(_.name)
-    val workers = sc.getConf.get("spark.executor.instances").toInt
-    val cores = sc.getConf.get("spark.executor.cores").toInt
+    val workers = spark.sparkContext.getConf.get("spark.executor.instances").toInt
+    val cores = spark.sparkContext.getConf.get("spark.executor.cores").toInt
 
     // name of database to create.
 
-    tableNames.foreach { tableName =>
-      // generate data
-      time {
-        tables.genData(
-          location = location,
-          format = format,
-          overwrite = config.overwrite,
-          partitionTables = partitionTables,
-          // if to coallesce into a single file (only one writter for non partitioned tables = slow)
-          clusterByPartitionColumns = clusterByPartitionColumns, //if (isPartitioned(tables, tableName)) false else true,
-          filterOutNullPartitionValues = filterOutNullPartitionValues,
-          tableFilter = tableName,
-          // this controlls parallelism on datagen and number of writers (# of files for non-partitioned)
-          // in general we want many writers to S3, and smaller tasks for large scale factors to avoid OOM and shuffle errors
-          numPartitions = if (config.scaleFactor.toInt <= 100 || !isPartitioned(tables, tableName)) (workers * cores)
-          else (workers * cores * 4))
-      }
-    }
+    val nonPartitionedTables = if (config.benchmarkName == "TPCDS") Array(
+      "call_center", "catalog_page", "customer", "customer_address",  "customer_demographics", "date_dim",
+      "household_demographics", "income_band", "item", "promotion", "reason", "ship_mode", "store",  "time_dim",
+      "warehouse", "web_page", "web_site") else Array(
+      "nation", "region"
+    )
 
+    nonPartitionedTables.foreach { t => {
+      tables.genData(
+        location = location,
+        format = format,
+        overwrite = config.overwrite,
+        partitionTables = partitionTables,
+        clusterByPartitionColumns = clusterByPartitionColumns,
+        filterOutNullPartitionValues = filterOutNullPartitionValues,
+        tableFilter = t,
+        numPartitions = numNonpartitioned)
+    }}
+
+    val partitionedTables = if (config.benchmarkName == "TPCDS") Array(
+      "inventory", "web_returns", "catalog_returns", "store_returns", "web_sales", "catalog_sales",
+      "store_sales") else Array("part", "supplier", "partsupp", "customer", "orders", "lineitem")
+
+    partitionedTables.foreach { t => {
+      tables.genData(
+        location = location,
+        format = format,
+        overwrite = config.overwrite,
+        partitionTables = partitionTables,
+        clusterByPartitionColumns = clusterByPartitionColumns,
+        filterOutNullPartitionValues = filterOutNullPartitionValues,
+        tableFilter = t,
+        numPartitions = (workers * cores * 4).max(sf.toInt.min(numPartitioned)))
+    }}
+
+//    val tableNames = tables.tables.map(_.name)
+//    tableNames.foreach { tableName =>
+//      // generate data
+//      time {
+//        tables.genData(
+//          location = location,
+//          format = format,
+//          overwrite = config.overwrite,
+//          partitionTables = partitionTables,
+//          // if to coallesce into a single file (only one writter for non partitioned tables = slow)
+//          clusterByPartitionColumns = clusterByPartitionColumns, //if (isPartitioned(tables, tableName)) false else true,
+//          filterOutNullPartitionValues = filterOutNullPartitionValues,
+//          tableFilter = tableName,
+//          // this controlls parallelism on datagen and number of writers (# of files for non-partitioned)
+//          // in general we want many writers to S3, and smaller tasks for large scale factors to avoid OOM and shuffle errors
+//          numPartitions = if (sf.toInt <= 100 || !isPartitioned(tables, tableName)) 10 else min(sf.toInt, 10000)
+//      }
+//    }
+
+    spark.sql(s"drop database if exists $databaseName cascade")
     println(s"Creating external tables at $location")
     tables.createExternalTables(location, format, databaseName, overwrite = true, discoverPartitions = true)
+    spark.sql(s"use $databaseName")
     tables.analyzeTables(databaseName, analyzeColumns = true)
 
   }

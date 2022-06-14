@@ -18,7 +18,7 @@ case class RunBenchmarkConfig
 object MyRunBenchmark {
 
   val iterations = 1
-  val timeout = 24*60*60 // timeout, in seconds.
+  val timeout = 36*60*60 // timeout, in seconds.
 
   def main(args: Array[String]): Unit = {
     val parser = new scopt.OptionParser[RunBenchmarkConfig]("Run-Benchmark-Query") {
@@ -50,8 +50,10 @@ object MyRunBenchmark {
   def run(config: RunBenchmarkConfig): Unit = {
     assert(config.benchmarkName == "TPCH" || config.benchmarkName == "TPCDS")
 
+    val sf = config.scaleFactor
     val spark = SparkSession
       .builder()
+      .config("spark.sql.shuffle.partitions", if (sf.toInt >= 10000) "20000" else if (sf.toInt >= 1000) "2001" else "200")
       .enableHiveSupport()
       .getOrCreate()
 

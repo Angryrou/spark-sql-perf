@@ -8,9 +8,6 @@ para=$3
 
 cpe=4 # core per exec
 mpe=32 # mem per exec = 4 core x 8G/core = 32G
-ninsts=35 # 7x5
-spara=200
-
 
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.properties
@@ -27,7 +24,6 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.executorEnv.JAVA_HOME=$jpath \
 --conf spark.yarn.appMasterEnv.JAVA_HOME=$jpath \
 --conf spark.default.parallelism=$para \
---conf spark.sql.shuffle.partitions=$spara \
 --conf spark.executor.instances=35 \
 --conf spark.executor.cores=${cpe} \
 --conf spark.executor.memory=${mpe}g \
@@ -39,6 +35,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.rpc.askTimeout=12000 \
 --conf spark.shuffle.io.retryWait=60 \
 --conf spark.sql.autoBroadcastJoinThreshold=200m \
+--conf spark.sql.broadcastTimeout=10000 \
 --driver-java-options "-Dlog4j.configuration=file:$lpath" \
 --conf "spark.driver.extraJavaOptions=-Xms20g" \
 --conf "spark.executor.extraJavaOptions=-Dlog4j.configuration=file:log4j.properties" \
@@ -70,3 +67,4 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 20
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 50
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 100
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 3000 50
