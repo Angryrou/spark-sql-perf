@@ -37,7 +37,6 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.rpc.askTimeout=12000 \
 --conf spark.shuffle.io.retryWait=60 \
 --conf spark.sql.parquet.compression.codec=snappy \
---conf spark.sql.autoBroadcastJoinThreshold=200m \
 --conf spark.sql.broadcastTimeout=10000 \
 --driver-java-options "-Dlog4j.configuration=file:$lpath" \
 --conf "spark.driver.extraJavaOptions=-Xms20g" \
