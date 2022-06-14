@@ -29,7 +29,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --files "$lpath" \
 --jars ~/spark/examples/jars/scopt_2.12-3.7.1.jar \
 /opt/hex_users/$USER/chenghao/spark-sql-perf/target/scala-2.12/spark-sql-perf_2.12-0.5.1-SNAPSHOT.jar \
--b $bm -d /mnt/disk7/chenghao-dataset -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark
+-b $bm -d /mnt/disk7/chenghao-dataset -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark -o true
 
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCH 10
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCH 100
