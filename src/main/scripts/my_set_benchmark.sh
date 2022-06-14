@@ -2,6 +2,7 @@ bm=$1
 sf=$2
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.properties
+spara=200
 
 ~/spark/bin/spark-submit \
 --class com.databricks.spark.sql.perf.MySetBenchmark \
@@ -11,13 +12,14 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.executorEnv.JAVA_HOME=$jpath \
 --conf spark.yarn.appMasterEnv.JAVA_HOME=$jpath \
 --conf spark.default.parallelism=140 \
+--conf spark.sql.shuffle.partitions=$spara \
 --conf spark.executor.instances=35 \
 --conf spark.executor.cores=4 \
 --conf spark.executor.memory=80g \
---conf spark.yarn.am.memory=80g \
 --conf spark.yarn.am.cores=5 \
---conf spark.driver.memory=80g \
+--conf spark.yarn.am.memory=80g \
 --conf spark.driver.cores=5 \
+--conf spark.driver.memory=80g \
 --conf spark.reducer.maxSizeInFlight=256m \
 --conf spark.rpc.askTimeout=12000 \
 --conf spark.shuffle.io.retryWait=60 \
@@ -33,7 +35,11 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCH 10
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCH 100
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCH 1000
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCH 3000
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCH 10000
 #
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCDS 10
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCDS 100
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCDS 1000
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCDS 3000
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_set_benchmark.sh TPCDS 10000

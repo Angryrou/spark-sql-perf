@@ -9,7 +9,7 @@ para=$3
 cpe=4 # core per exec
 mpe=32 # mem per exec = 4 core x 8G/core = 32G
 ninsts=35 # 7x5
-spara=420
+spara=200
 
 
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
@@ -31,6 +31,9 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.executor.instances=35 \
 --conf spark.executor.cores=${cpe} \
 --conf spark.executor.memory=${mpe}g \
+--conf spark.yarn.am.cores=5 \
+--conf spark.yarn.am.memory=${mpe}g \
+--conf spark.driver.cores=5 \
 --conf spark.driver.memory=${mpe}g \
 --conf spark.reducer.maxSizeInFlight=256m \
 --conf spark.rpc.askTimeout=12000 \
