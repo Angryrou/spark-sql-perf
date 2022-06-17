@@ -3,6 +3,7 @@ sf=$2
 nexec=$3
 npara=$4
 spara=$5
+oc=$6
 
 # md values
 # 1 core -> 8G mem
@@ -40,7 +41,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.sql.parquet.compression.codec=snappy \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
 --conf spark.kryoserializer.buffer.max=512m \
---conf spark.sql.files.openCostInBytes=134217728 \
+--conf spark.sql.files.openCostInBytes=$(($oc * 1024 * 1024)) \
 --conf spark.sql.broadcastTimeout=10000 \
 --driver-java-options "-Dlog4j.configuration=file:$lpath" \
 --conf "spark.driver.extraJavaOptions=-Xms20g" \
@@ -49,6 +50,22 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --jars ~/spark/examples/jars/scopt_2.12-3.7.1.jar \
 /opt/hex_users/$USER/chenghao/spark-sql-perf/target/scala-2.12/spark-sql-perf_2.12-0.5.1-SNAPSHOT.jar \
 -b $bm -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark
+
+
+#bm=TPCH
+#for oc in 4 128
+#do
+#  for sf in 100 1000
+#  do
+#    for nexec in 4 8 16 32
+#    do
+#      for p2c in 1 2
+#      do
+#        bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh $bm $sf $nexec $(($nexec * 4 * $p2c)) $(($nexec * 4 * $p2c)) $oc # 16 cores
+#      done
+#    done
+#  done
+#done
 
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 4 32 32 # 16 cores
 #bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 8 64 64 # 32 cores
