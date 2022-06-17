@@ -1,6 +1,7 @@
 bm=$1
 sf=$2
-para=$3
+nexec=$3
+npara=$4
 
 # md values
 # 1 core -> 8G mem
@@ -18,13 +19,13 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 
 ~/spark/bin/spark-submit \
 --class com.databricks.spark.sql.perf.MyRunBenchmark \
---name ${bm}_${sf}_run_para=${para} \
+--name ${bm}_${sf}_run_para=${npara} \
 --master yarn \
 --deploy-mode client \
---conf spark.executorEnv.JAVA_HOME=$jpath \
---conf spark.yarn.appMasterEnv.JAVA_HOME=$jpath \
---conf spark.default.parallelism=$para \
---conf spark.executor.instances=35 \
+--conf spark.executorEnv.JAVA_HOME=${jpath} \
+--conf spark.yarn.appMasterEnv.JAVA_HOME=${jpath} \
+--conf spark.default.parallelism=${npara} \
+--conf spark.executor.instances=${nexec} \
 --conf spark.executor.cores=${cpe} \
 --conf spark.executor.memory=${mpe}g \
 --conf spark.yarn.am.cores=5 \
@@ -37,6 +38,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 --conf spark.sql.parquet.compression.codec=snappy \
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer \
 --conf spark.kryoserializer.buffer.max=512m \
+--conf spark.sql.files.openCostInBytes=134217728 \
 --conf spark.sql.broadcastTimeout=10000 \
 --driver-java-options "-Dlog4j.configuration=file:$lpath" \
 --conf "spark.driver.extraJavaOptions=-Xms20g" \
@@ -46,27 +48,20 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 /opt/hex_users/$USER/chenghao/spark-sql-perf/target/scala-2.12/spark-sql-perf_2.12-0.5.1-SNAPSHOT.jar \
 -b $bm -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark
 
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 10 100
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 4 32 # 16 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 8 64 # 32 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 16 128 # 64 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 35 280 # 140 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 4 32 # 16 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 8 64 # 32 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 16 128 # 64 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 35 280 # 140 cores
 #
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 100 100
-#
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCH 1000 100
-#
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 10 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 10 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 10 100
-#
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 100
-#
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 20
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 50
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 100
-#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 3000 50
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 4 32 # 16 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 8 64 # 32 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 16 128 # 64 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 100 35 280 # 140 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 4 32 # 16 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 8 64 # 32 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 16 128 # 64 cores
+#bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh TPCDS 1000 35 280 # 140 cores
