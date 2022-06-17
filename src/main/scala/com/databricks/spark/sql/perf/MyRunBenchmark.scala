@@ -53,7 +53,7 @@ object MyRunBenchmark {
     val sf = config.scaleFactor
     val spark = SparkSession
       .builder()
-      .config("spark.sql.shuffle.partitions", if (sf.toInt >= 10000) "20000" else if (sf.toInt >= 1000) "2001" else "200")
+//      .config("spark.sql.shuffle.partitions", if (sf.toInt >= 10000) "20000" else if (sf.toInt >= 1000) "2001" else "200")
       .enableHiveSupport()
       .getOrCreate()
 
