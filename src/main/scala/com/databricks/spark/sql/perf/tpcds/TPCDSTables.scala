@@ -45,7 +45,7 @@ class DSDGEN(dsdgenDir: String) extends DataGenerator {
           s"cd $localToolsDir && ./dsdgen -table $name -filter Y -scale $scaleFactor -RNGSEED 100 $parallel")
         println(commands)
         BlockingLineStream(commands)
-      }
+      }.repartition(partitions)
     }
 
     generatedData.setName(s"$name, sf=$scaleFactor, strings")
