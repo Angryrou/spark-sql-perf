@@ -7,7 +7,7 @@ npara=64
 spara=64
 ncores=$(($cpe * $nexec))
 
-bm=TPCH_100
+bm=TPCH
 sf=100
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.properties
