@@ -26,9 +26,9 @@ do
   --conf spark.executor.instances=${nexec} \
   --conf spark.executor.cores=${cpe} \
   --conf spark.executor.memory=${mpe}g \
-  --conf spark.yarn.am.cores=cpe \
+  --conf spark.yarn.am.cores=${cpe} \
   --conf spark.yarn.am.memory=${mpe}g \
-  --conf spark.driver.cores=cpe \
+  --conf spark.driver.cores=${cpe} \
   --conf spark.driver.memory=${mpe}g \
   --conf spark.reducer.maxSizeInFlight=256m \
   --conf spark.rpc.askTimeout=12000 \
