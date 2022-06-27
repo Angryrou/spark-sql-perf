@@ -50,7 +50,6 @@ object MyRunBenchmark {
   def run(config: RunBenchmarkConfig): Unit = {
     assert(config.benchmarkName == "TPCH" || config.benchmarkName == "TPCDS")
 
-    val sf = config.scaleFactor
     val spark = SparkSession
       .builder()
       .enableHiveSupport()
