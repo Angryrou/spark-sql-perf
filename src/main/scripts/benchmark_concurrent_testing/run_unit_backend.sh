@@ -1,5 +1,6 @@
-SMODE=$1
-nexec=$2
+sf=$1
+SMODE=$2
+nexec=$3
 cpe=4 # core per exec
 mpe=32 # mem per exec = 4 core x 8G/core = 32G
 
@@ -8,7 +9,6 @@ npara=$ncores
 spara=$ncores
 
 bm=TPCH
-sf=100
 jpath=/opt/hex_users/$USER/spark-3.2.1-hadoop3.3.0/jdk1.8
 lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.properties
 
@@ -16,7 +16,7 @@ for submit in 4 5
 do
   ~/spark/bin/spark-submit \
   --class com.databricks.spark.sql.perf.MyRunQuery \
-  --name ${bm}_${sf}_run_c${ncores}_p${npara}_sp=${spara}_${SMODE}_${submit} \
+  --name ${bm}_${sf}_run_para_c${ncores}_p${npara}_${SMODE}_${submit} \
   --master yarn \
   --deploy-mode client \
   --conf spark.executorEnv.JAVA_HOME=${jpath} \
