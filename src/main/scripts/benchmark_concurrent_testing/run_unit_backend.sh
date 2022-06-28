@@ -44,7 +44,7 @@ do
   --files "$lpath" \
   --jars ~/spark/examples/jars/scopt_2.12-3.7.1.jar \
   /opt/hex_users/$USER/chenghao/spark-sql-perf/target/scala-2.12/spark-sql-perf_2.12-0.5.1-SNAPSHOT.jar \
-  -b $bm -q $submit -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark > ${SMODE}_${submit}.log 2>&1
+  -b $bm -q $submit -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark > ${SMODE}_${submit}.log 2>&1 &
 done
 
 # bash ~/chenghao/spark-sql-perf/src/main/scripts/benchmark_concurrent_testing/run_unit.sh FIFO
