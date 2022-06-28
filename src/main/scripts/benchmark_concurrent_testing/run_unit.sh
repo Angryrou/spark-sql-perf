@@ -16,7 +16,7 @@ for submit in 4 5
 do
   ~/spark/bin/spark-submit \
   --class com.databricks.spark.sql.perf.MyRunQuery \
-  --name ${bm}_${sf}_run_c${ncores}_p${npara}_sp=${spara}_${submit} \
+  --name ${bm}_${sf}_run_c${ncores}_p${npara}_sp=${spara}_${SMODE}_{submit} \
   --master yarn \
   --deploy-mode client \
   --conf spark.executorEnv.JAVA_HOME=${jpath} \
@@ -47,5 +47,5 @@ do
   -b $bm -q $submit -s $sf -l hdfs://${HOSTNAME}-opa:8020/user/spark_benchmark > ${SMODE}_${submit}.log 2>&1 &
 done
 
-
+# bash ~/chenghao/spark-sql-perf/src/main/scripts/benchmark_concurrent_testing/run_unit.sh FIFO
 
