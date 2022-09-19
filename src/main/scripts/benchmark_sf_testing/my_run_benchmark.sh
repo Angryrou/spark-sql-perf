@@ -61,7 +61,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 #    do
 #      for p2c in 1 2
 #      do
-#        bash ~/chenghao/spark-sql-perf/src/main/scripts/my_run_benchmark.sh $bm $sf $nexec $(($nexec * 4 * $p2c)) $(($nexec * 4 * $p2c)) $oc # 16 cores
+#        bash ~/chenghao/spark-sql-perf/src/main/scripts/benchmark_sf_testing/my_run_benchmark.sh $bm $sf $nexec $(($nexec * 4 * $p2c)) $(($nexec * 4 * $p2c)) $oc # 16 cores
 #      done
 #    done
 #  done
