@@ -1,8 +1,6 @@
 package com.databricks.spark.sql.perf
 
-import org.apache.commons.io.IOUtils
 import org.apache.spark.sql.SparkSession
-
 
 case class RunTemplateQueryConfig
 (
@@ -69,8 +67,11 @@ object MyRunTemplateQuery {
     val queryLocationHeader: String = config.queryLocationHeader
 
     spark.sql(s"use $databaseName")
-    val queryContent: String = IOUtils.toString(
-      getClass().getClassLoader().getResourceAsStream(s"${queryLocationHeader}/${tid}/${tid}-${qid}.sql"))
-    spark.sql(queryContent)
+    val source = scala.io.Source.fromFile(s"${queryLocationHeader}/${tid}/${tid}-${qid}.sql")
+    val queryContent: String = try source.mkString finally source.close()
+    print(s"run ${queryLocationHeader}/${tid}/${tid}-${qid}.sql")
+    print(queryContent)
+    spark.sql(queryContent).show()
+
   }
 }
