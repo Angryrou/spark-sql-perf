@@ -14,9 +14,6 @@ case class RunTemplateQueryConfig
 
 object MyRunTemplateQuery {
 
-  val iterations = 1
-  val timeout = 36 * 60 * 60 // timeout, in seconds.
-
   def main(args: Array[String]): Unit = {
     val parser = new scopt.OptionParser[RunTemplateQueryConfig]("Run-Benchmark-Query") {
       opt[String]('b', "benchmark")
@@ -24,7 +21,7 @@ object MyRunTemplateQuery {
         .text("the name of the benchmark to run")
         .required()
       opt[String]('t', "templateName")
-        .action { (x, c) => c.copy(queryName = x) }
+        .action { (x, c) => c.copy(templateName = x) }
         .text("the templateName to run")
         .required()
       opt[String]('q', "queryName")
