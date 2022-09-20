@@ -2,9 +2,9 @@ tid=$1
 qid=$2
 qheader=$3
 
-cpe=4 # core per exec
+cpe=5 # core per exec
 mpe=32 # mem per exec = 4 core x 8G/core = 32G
-nexec=4
+nexec=8
 
 ncores=$(($cpe * $nexec))
 npara=$ncores
@@ -18,7 +18,7 @@ lpath=/opt/hex_users/$USER/chenghao/spark-sql-perf/src/main/resources/log4j.prop
 
 ~/spark/bin/spark-submit \
 --class com.databricks.spark.sql.perf.MyRunTemplateQuery \
---name ${bm}_${sf}_run_solo_c${ncores}_p${npara}_${SMODE}_${submit} \
+--name q${tid}-${qid} \
 --master yarn \
 --deploy-mode client \
 --conf spark.executorEnv.JAVA_HOME=${jpath} \
