@@ -69,6 +69,7 @@ object MyRunTemplateQuery {
     println(s"run ${queryLocationHeader}/${tid}/${tid}-${qid}.sql")
     println(queryContent)
     spark.sql(queryContent).collect()
-    
+
+    spark.close()
   }
 }

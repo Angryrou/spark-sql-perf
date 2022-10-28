@@ -52,7 +52,7 @@ class DBGEN(dbgenDir: String, params: Seq[String]) extends DataGenerator {
         val paramsString = params.mkString(" ")
         val commands = Seq(
           "bash", "-c",
-          s"cd $localToolsDir && ./dbgen -q $paramsString -T ${shortTableNames(name)} -s $scaleFactor $parallel")
+          s"cd $localToolsDir && ./dbgen $paramsString -q -f -T ${shortTableNames(name)} -s $scaleFactor $parallel")
         println(commands)
         BlockingLineStream(commands)
       }.repartition(numPartitions)
