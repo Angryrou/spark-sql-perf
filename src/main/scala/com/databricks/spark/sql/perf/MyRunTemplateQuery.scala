@@ -57,7 +57,6 @@ object MyRunTemplateQuery {
       .builder()
       .enableHiveSupport()
       .getOrCreate()
-    spark.sparkContext.setLocalProperty("spark.scheduler.pool", "fair_pool")
 
     val databaseName = if (config.databaseName == null) s"${config.benchmarkName.toLowerCase}_${config.scaleFactor}" else config.databaseName
     val tid: String = config.templateName
