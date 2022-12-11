@@ -40,7 +40,9 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % "test"
 
 libraryDependencies += "org.yaml" % "snakeyaml" % "1.23"
 
-libraryDependencies += "com.lihaoyi" %% "upickle" % "1.6.0" 
+libraryDependencies += "org.json4s" %% "json4s-native" % "{latestVersion}"
+
+libraryDependencies += "org.json4s" %% "json4s-jackson" % "{latestVersion}"
 
 fork := true
 
