@@ -40,10 +40,6 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % "test"
 
 libraryDependencies += "org.yaml" % "snakeyaml" % "1.23"
 
-libraryDependencies += "org.json4s" %% "json4s-native" % "4.1.0"
-
-libraryDependencies += "org.json4s" %% "json4s-jackson" % "4.1.0"
-
 fork := true
 
 // Your username to login to Databricks Cloud

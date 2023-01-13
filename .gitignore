@@ -22,3 +22,6 @@ performance/
 
 *.pdf
 *.py
+*.sql
+metastore_db
+spark-warehouse
