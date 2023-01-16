@@ -66,6 +66,8 @@ object MyRunTemplateQuery {
     spark.sql(s"use $databaseName")
     val source = scala.io.Source.fromFile(s"${queryLocationHeader}/${tid}/${tid}-${qid}.sql")
     val queryContent: String = try source.mkString finally source.close()
+
+    println(spark.sparkContext.applicationId)
     println(s"run ${queryLocationHeader}/${tid}/${tid}-${qid}.sql")
     println(queryContent)
     spark.sql(queryContent).collect()
