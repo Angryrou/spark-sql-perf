@@ -4,7 +4,7 @@ import org.apache.spark.sql.SparkSession
 
 import scala.collection.mutable.ListBuffer
 
-object RunSingleQuery {
+object RunQuery {
   def main(args: Array[String]): Unit = {
 
     val sf = args(0).toInt
