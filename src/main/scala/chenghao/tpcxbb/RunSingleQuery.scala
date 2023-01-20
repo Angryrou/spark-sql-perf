@@ -10,6 +10,7 @@ object RunSingleQuery {
     val sf = args(0).toInt
     val qid = args(1).toInt
     val vid = args(2).toInt
+    val header = args(3).toString
 
     val db = s"bigbench_sf_$sf"
 
@@ -18,9 +19,9 @@ object RunSingleQuery {
       .enableHiveSupport()
       .getOrCreate()
     val sc = spark.sparkContext
-    spark.sql("use $db")
+    spark.sql(s"use ${db}")
     qid match {
-      case 1 => Queries.run_q1(spark, vid)
+      case 1 => Queries.run_q1(spark, vid, header)
       case 2 => Queries.run_q2(spark, vid)
       case 3 => Queries.run_q3(spark, vid)
       case 4 => Queries.run_q4(spark, vid)
@@ -52,7 +53,8 @@ object RunSingleQuery {
       case 30 => Queries.run_q30(spark, vid)
     }
 
-    print(spark.sparkContext.applicationId)
+    println(spark.sparkContext.applicationId)
+    println(spark.sparkContext.getConf.get("spark.yarn.historyServer.address"))
 
     spark.sqlContext.clearCache()
     spark.stop()

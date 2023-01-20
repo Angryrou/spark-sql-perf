@@ -1,5 +1,6 @@
 package chenghao.tpcxbb
 
+import chenghao.tpcxbb.Paras.{q01_limit, q01_ss_store_sk_IN, q01_viewed_together_count}
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification.{LogisticRegressionModel, NaiveBayes, LogisticRegression => LogisticRegressionSpark}
 import org.apache.spark.ml.clustering.{KMeans, KMeansModel}
@@ -8,6 +9,7 @@ import org.apache.spark.mllib.evaluation.MulticlassMetrics
 import org.apache.spark.sql.functions._
 import org.apache.spark.ml.feature.{HashingTF, IDF, Tokenizer, VectorAssembler}
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import java.io.PrintWriter
 
 
 object Queries {
@@ -46,7 +48,7 @@ object Queries {
   )
 
   def parse_vid(qid: Int, vid: Int) = {
-    assert(vid >=0 && vid < 40)
+    assert(vid >=1 && vid <= 100)
     var i1 = -1
     var i2 = -1
     if (vid < 9) {
@@ -71,24 +73,12 @@ object Queries {
     (i1, i2)
   }
 
-  val run_q1 = (spark: SparkSession, vid: Int) => {
+  val run_q1 = (spark: SparkSession, vid: Int, header: String) => {
 
     // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(1, vid)
-    val q01_limit = Paras.q01_limit_list(i1)
-    val q01_i_category_id_IN = Paras.q01_i_category_id_IN_list(i2)
-
-    println(s"The default paramters for template 1 are: q01_limit = ${Paras.q01_limit_list(0)}, " +
-      s"q01_i_category_id_IN = ${Paras.q01_i_category_id_IN_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q01_limit = $q01_limit, q01_i_category_id_IN = $q01_i_category_id_IN")
-    }
-
+    val q01_i_category_id_IN = Paras.q01_i_category_id_IN_list(vid)
     spark.sql("CREATE TEMPORARY FUNCTION makePairs AS 'io.bigdatabenchmark.v1.queries.udf.PairwiseUDTF'")
-    spark.sql(
-      s"""
+    val queryContent = s"""
          |SELECT item_sk_1, item_sk_2, COUNT(*) AS cnt
          |FROM
          |(
@@ -104,16 +94,21 @@ object Queries {
          |    -- Only products in certain categories sold in specific stores are considered,
          |    WHERE s.ss_item_sk = i.i_item_sk
          |    AND i.i_category_id IN (${q01_i_category_id_IN})
-         |    AND s.ss_store_sk IN (${Paras.q01_ss_store_sk_IN})
+         |    AND s.ss_store_sk IN (${q01_ss_store_sk_IN})
          |    GROUP BY ss_ticket_number
          |  ) soldItemsPerTicket
          |) soldTogetherPairs
          |GROUP BY item_sk_1, item_sk_2
          |-- 'frequently'
-         |HAVING cnt > ${Paras.q01_viewed_together_count}
+         |HAVING cnt > ${q01_viewed_together_count}
          |ORDER BY cnt DESC, item_sk_1, item_sk_2
          |LIMIT ${q01_limit}
-      """.stripMargin).collect()
+      """.stripMargin
+    spark.sql(queryContent).collect()
+    val logicPlan = spark.sql("explain cost " + queryContent).head().getString(0)
+    new java.io.File(header + "/q1").mkdirs
+    val filename = header + "/q1/" + spark.sparkContext.appName + ".txt"
+    new PrintWriter(filename) { write(logicPlan); close }
     //  clean
     spark.sql("DROP TEMPORARY FUNCTION makePairs")
   }

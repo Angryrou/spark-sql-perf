@@ -68,6 +68,8 @@ object MyRunTemplateQuery {
     val queryContent: String = try source.mkString finally source.close()
 
     println(spark.sparkContext.applicationId)
+    println(spark.sparkContext.getConf.get("spark.yarn.historyServer.address"))
+
     println(s"run ${queryLocationHeader}/${tid}/${tid}-${qid}.sql")
     println(queryContent)
     spark.sql(queryContent).collect()
