@@ -145,26 +145,31 @@ object Paras {
   val q12_i_category_IN_list = i_categories.combinations(3).map(_.map(x => s"'${x}'").mkString(",")).toList ++
     i_categories.combinations(2).map(_.map(x => s"'${x}'").mkString(",")).toList
 
-
   //  Q13
-  val q13_year_list = List(2001, 2002, 2003, 2004, 2005)
-  val q13_limit_list = List(100, 50, 150, 70, 80, 90, 110, 120)
+  val q13_year_list = 1922 to 2022
+  val q13_limit = 100
 
   //  Q14
-  val q14_dependents_list = List(5, 2, 8, 3, 4, 6, 7, 9)
-  val q14_morning_startHour = 7
-  val q14_morning_endHour = 8
-  val q14_evening_startHour = 19
-  val q14_evening_endHour = 20
-  val q14_content_len_min_list = List(5000, 4000, 3000, 4500, 3500)
-  val q14_content_len_max_list = List(6000, 5000, 4000, 5500, 4500)
+  val q14_dependents_list = 3 to 7 // 5 choices
+  val q14_morning_startHour_list = 6 to 10 // 5 choices
+  val q14_hour_gap = 1 to 2 // 2 choices
+  val q14_content_len_min_list = List(4000, 5000)
+  val q14_list = for (
+    i <- q14_dependents_list;
+    j <- q14_morning_startHour_list;
+    k <- q14_hour_gap;
+    m <- q14_content_len_min_list
+  ) yield (i, j, j+k, j+12, j+12+k, m, m + 1000)
+
 
   //  Q15
-  val q15_startDate_list = List("2001-09-02", "2002-09-02", "2003-09-02",
-    "2001-12-02", "2002-03-02", "2002-06-02", "2002-12-02", "2003-03-02")
-  val q15_endDate_list = List("2002-09-02", "2003-09-02", "2004-09-02",
-    "2002-12-02", "2003-03-02", "2003-06-02", "2003-12-02", "2004-03-02")
-  val q15_store_sk_list = List(10, 5, 0, 15, 20)
+  val q15_startDate_list = List("2003-01-02", "2003-02-02", "2003-03-02", "2003-04-02", "2003-05-02",
+    "2003-06-02", "2003-07-02", "2003-08-02", "2003-09-02", "2003-10-02")
+  val q15_store_sk_list = 1 to 10
+  val q15_list = for (
+    i <- q15_startDate_list;
+    j <- q15_store_sk_list
+  ) yield (i, (i.split("-")(0).toInt + 1).toString + i.slice(4, 10), j)
 
   //  Q16
   val q16_date_list = List("2001-03-16", "2001-02-16", "2001-04-16", "2001-02-26", "2001-03-26")

@@ -757,18 +757,7 @@ object Queries {
 
   val run_q13 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // [reversed] i1 x i2 = 5 x 8
-    val (i1, i2) = parse_vid(13, vid)
-    val q13_year = q13_year_list(i1)
-    val q13_limit = q13_limit_list(i2)
-
-    println(s"The default paramters for template 13 are: q13_year = ${q13_year_list(0)}, " +
-      s"q13_limit = ${q13_limit_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q13_year = $q13_year, q13_limit = $q13_limit")
-    }
+    val q13_year = q13_year_list(vid - 1)
 
     val tmp_tbl1 = "tmp_tbl1"
     val tmp_tbl2 = "tmp_tbl2"
@@ -825,86 +814,16 @@ object Queries {
          |LIMIT ${q13_limit}
          |
          |""".stripMargin
-
-    val tmp_df1 = spark.sql(
-      s"""
-         |SELECT
-         |    ss.ss_customer_sk AS customer_sk,
-         |    sum( case when (d_year = ${q13_year})   THEN ss_net_paid  ELSE 0 END) first_year_total,
-         |    sum( case when (d_year = ${q13_year}+1) THEN ss_net_paid  ELSE 0 END) second_year_total
-         |FROM store_sales ss
-         |JOIN (
-         |  SELECT d_date_sk, d_year
-         |  FROM date_dim d
-         |  WHERE d.d_year in (${q13_year}, (${q13_year} + 1))
-         |) dd on ( ss.ss_sold_date_sk = dd.d_date_sk )
-         |GROUP BY ss.ss_customer_sk
-         |HAVING first_year_total > 0
-       """.stripMargin)
-    tmp_df1.createOrReplaceTempView(tmp_tbl1)
-
-    val tmp_df2 = spark.sql(
-      s"""
-         |SELECT
-         |       ws.ws_bill_customer_sk AS customer_sk,
-         |       sum( case when (d_year = ${q13_year})   THEN ws_net_paid  ELSE 0 END) first_year_total,
-         |       sum( case when (d_year = ${q13_year}+1) THEN ws_net_paid  ELSE 0 END) second_year_total
-         |FROM web_sales ws
-         |JOIN (
-         |  SELECT d_date_sk, d_year
-         |  FROM date_dim d
-         |  WHERE d.d_year in (${q13_year}, (${q13_year} + 1) )
-         |) dd ON ( ws.ws_sold_date_sk = dd.d_date_sk )
-         |GROUP BY ws.ws_bill_customer_sk
-         |HAVING first_year_total > 0
-       """.stripMargin)
-    tmp_df2.createOrReplaceTempView(tmp_tbl2)
-
-    spark.sql(
-      s"""
-         |SELECT
-         |      c_customer_sk,
-         |      c_first_name,
-         |      c_last_name,
-         |      (store.second_year_total / store.first_year_total) AS storeSalesIncreaseRatio ,
-         |      (web.second_year_total / web.first_year_total) AS webSalesIncreaseRatio
-         |FROM ${tmp_tbl1} store ,
-         |     ${tmp_tbl2} web ,
-         |     customer c
-         |WHERE store.customer_sk = web.customer_sk
-         |AND   web.customer_sk = c_customer_sk
-         |-- if customer has sales in first year for both store and websales, select him only if web second_year_total/first_year_total ratio is bigger then his store second_year_total/first_year_total ratio.
-         |AND   (web.second_year_total / web.first_year_total)  >  (store.second_year_total / store.first_year_total)
-         |ORDER BY
-         |  webSalesIncreaseRatio DESC,
-         |  c_customer_sk,
-         |  c_first_name,
-         |  c_last_name
-         |LIMIT ${q13_limit}
-       """.stripMargin).collect()
-
-    spark.catalog.dropTempView(tmp_tbl1)
-    spark.catalog.dropTempView(tmp_tbl2)
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 13, queryContent, header)
   }
 
   val run_q14 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(14, vid)
-    val q14_dependents = q14_dependents_list(i1)
-    val q14_content_len_min = q14_content_len_min_list(i2)
-    val q14_content_len_max = q14_content_len_max_list(i2)
-
-    println(s"The default paramters for template 14 are: q14_dependents = ${q14_dependents_list(0)}, " +
-      s"q14_content_len_min = ${q14_content_len_min_list(0)}, q14_content_len_max = ${q14_content_len_max_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q14_dependents = $q14_dependents, q14_content_len_min = $q14_content_len_min, " +
-        s"q14_content_len_max = $q14_content_len_max")
-    }
-
-    spark.sql(
+    val (q14_dependents, q14_morning_startHour, q14_morning_endHour, q14_evening_startHour, q14_evening_endHour,
+      q14_content_len_min, q14_content_len_max) = q14_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT CAST(amc as double) / CAST(pmc as double) am_pm_ratio
          |FROM (
@@ -931,26 +850,16 @@ object Queries {
          |  AND wp.wp_char_count >= ${q14_content_len_min}
          |  AND wp.wp_char_count <= ${q14_content_len_max}
          |) pt
-       """.stripMargin).collect()
+       """.stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 14, queryContent, header)
   }
 
   val run_q15 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(15, vid)
-    val q15_startDate = q15_startDate_list(i1)
-    val q15_endDate = q15_endDate_list(i1)
-    val q15_store_sk = q15_store_sk_list(i2)
-
-    println(s"The default paramters for template 15 are: q15_startDate = ${q15_startDate_list(0)}, " +
-      s"q15_endDate = ${q15_endDate_list(0)}, q15_store_sk = ${q15_store_sk_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q15_startDate = $q15_startDate, q15_endDate = $q15_endDate, q15_store_sk = $q15_store_sk")
-    }
-
-    spark.sql(
+    val (q15_startDate, q15_endDate, q15_store_sk) = q15_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT *
          |FROM (
@@ -982,7 +891,10 @@ object Queries {
          |) regression
          |WHERE slope <= 0
          |ORDER BY cat
-       """.stripMargin).collect()
+       """.stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 15, queryContent, header)
   }
 
   val run_q16 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
