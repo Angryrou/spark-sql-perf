@@ -11,6 +11,7 @@ object RunQuery {
     val qid = args(1).toInt
     val vid = args(2).toInt
     val header = args(3).toString
+    assert(vid >=1 && vid <= 100)
 
     val db = s"bigbench_sf_$sf"
 

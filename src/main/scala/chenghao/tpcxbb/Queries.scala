@@ -1,6 +1,6 @@
 package chenghao.tpcxbb
 
-import chenghao.tpcxbb.Paras.{q01_limit, q01_ss_store_sk_IN, q01_viewed_together_count}
+import chenghao.tpcxbb.Paras._
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification.{LogisticRegressionModel, NaiveBayes, LogisticRegression => LogisticRegressionSpark}
 import org.apache.spark.ml.clustering.{KMeans, KMeansModel}
@@ -9,6 +9,7 @@ import org.apache.spark.mllib.evaluation.MulticlassMetrics
 import org.apache.spark.sql.functions._
 import org.apache.spark.ml.feature.{HashingTF, IDF, Tokenizer, VectorAssembler}
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+
 import java.io.PrintWriter
 
 
@@ -73,10 +74,17 @@ object Queries {
     (i1, i2)
   }
 
-  val run_q1 = (spark: SparkSession, vid: Int, header: String) => {
+  def expose_logical_plan(spark: SparkSession, qid: Int, queryContent: String, header: String): Unit = {
+    val logicPlan = spark.sql("explain cost " + queryContent).head().getString(0)
+    new java.io.File(s"${header}/${qid}").mkdirs
+    val filename = s"${header}/${qid}/${spark.sparkContext.appName}.txt"
+    new PrintWriter(filename) { write(logicPlan); close }
+  }
 
-    // i1 x i2 = 8 x 5
-    val q01_i_category_id_IN = Paras.q01_i_category_id_IN_list(vid)
+
+  val run_q1 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
+
+    val q01_i_category_id_IN = q01_i_category_id_IN_list(vid - 1)
     spark.sql("CREATE TEMPORARY FUNCTION makePairs AS 'io.bigdatabenchmark.v1.queries.udf.PairwiseUDTF'")
     val queryContent = s"""
          |SELECT item_sk_1, item_sk_2, COUNT(*) AS cnt
@@ -104,111 +112,85 @@ object Queries {
          |ORDER BY cnt DESC, item_sk_1, item_sk_2
          |LIMIT ${q01_limit}
       """.stripMargin
-    spark.sql(queryContent).collect()
-    val logicPlan = spark.sql("explain cost " + queryContent).head().getString(0)
-    new java.io.File(header + "/q1").mkdirs
-    val filename = header + "/q1/" + spark.sparkContext.appName + ".txt"
-    new PrintWriter(filename) { write(logicPlan); close }
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 1, queryContent, header)
     //  clean
     spark.sql("DROP TEMPORARY FUNCTION makePairs")
   }
 
-  val run_q2 = (spark: SparkSession, vid: Int) => {
+  val run_q2 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(2, vid)
-    val q02_limit = Paras.q02_limit_list(i1)
-    val q02_item_sk = Paras.q02_item_sk_list(i2)
-
-    println(s"The default paramters for template 2 are: q02_limit = ${Paras.q02_limit_list(0)}, " +
-      s"q02_item_sk_list = ${Paras.q02_item_sk_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q02_limit = $q02_limit, q02_item_sk = $q02_item_sk")
-    }
-
+    val q02_item_sk = q02_item_sk_list(vid - 1)
     spark.sql("CREATE TEMPORARY FUNCTION makePairs AS 'io.bigdatabenchmark.v1.queries.udf.PairwiseUDTF'")
     val tmp_tbl = "tmp_view"
-    val tmp_df = spark.sql(
+    val queryContent =
       s"""
-         |SELECT DISTINCT
-         |  sessionid,
-         |  wcs_item_sk
-         |FROM
-         |(
-         |  FROM
-         |  (
-         |    SELECT
-         |      wcs_user_sk,
-         |      wcs_item_sk,
-         |      (wcs_click_date_sk * 24 * 60 * 60 + wcs_click_time_sk) AS tstamp_inSec
-         |    FROM web_clickstreams
-         |    WHERE wcs_item_sk IS NOT NULL
-         |    AND   wcs_user_sk IS NOT NULL
-         |    DISTRIBUTE BY wcs_user_sk
-         |    SORT BY
-         |      wcs_user_sk,
-         |      tstamp_inSec
-         |  ) clicksAnWebPageType
-         |  REDUCE
-         |    wcs_user_sk,
-         |    tstamp_inSec,
-         |    wcs_item_sk
-         |  USING 'python q2-sessionize.py ${Paras.q02_session_timeout_inSec}'
-         |  AS (
-         |    wcs_item_sk BIGINT,
-         |    sessionid STRING)
-         |) q02_tmp_sessionize
-         |CLUSTER BY sessionid
-      """.stripMargin)
-    tmp_df.createOrReplaceTempView(tmp_tbl)
-    spark.sql(
-      s"""
-         |SELECT
-         |  item_sk_1,
-         |  ${q02_item_sk} AS item_sk_2,
-         |  COUNT (*) AS cnt
-         |FROM
-         |(
-         |  SELECT explode(itemArray) AS item_sk_1
-         |  FROM
-         |  (
-         |    SELECT collect_list(wcs_item_sk) AS itemArray
-         |    FROM ${tmp_tbl}
-         |    GROUP BY sessionid
-         |    HAVING array_contains(itemArray, cast(${q02_item_sk} AS BIGINT) )
-         |  ) collectedList
-         |) pairs
-         |WHERE item_sk_1 <> ${q02_item_sk}
-         |GROUP BY item_sk_1
-         |ORDER BY
-         |  cnt DESC,
-         |  item_sk_1
-         |LIMIT ${q02_limit}
-      """.stripMargin).collect()
-
+        |with ${tmp_tbl} as (
+        |SELECT DISTINCT
+        |  sessionid,
+        |  wcs_item_sk
+        |FROM
+        |(
+        |  FROM
+        |  (
+        |    SELECT
+        |      wcs_user_sk,
+        |      wcs_item_sk,
+        |      (wcs_click_date_sk * 24 * 60 * 60 + wcs_click_time_sk) AS tstamp_inSec
+        |    FROM web_clickstreams
+        |    WHERE wcs_item_sk IS NOT NULL
+        |    AND   wcs_user_sk IS NOT NULL
+        |    DISTRIBUTE BY wcs_user_sk
+        |    SORT BY
+        |      wcs_user_sk,
+        |      tstamp_inSec
+        |  ) clicksAnWebPageType
+        |  REDUCE
+        |    wcs_user_sk,
+        |    tstamp_inSec,
+        |    wcs_item_sk
+        |  USING 'python q2-sessionize.py ${q02_session_timeout_inSec}'
+        |  AS (
+        |    wcs_item_sk BIGINT,
+        |    sessionid STRING)
+        |) q02_tmp_sessionize
+        |CLUSTER BY sessionid
+        |)
+        |
+        |SELECT
+        |  item_sk_1,
+        |  ${q02_item_sk} AS item_sk_2,
+        |  COUNT (*) AS cnt
+        |FROM
+        |(
+        |  SELECT explode(itemArray) AS item_sk_1
+        |  FROM
+        |  (
+        |    SELECT collect_list(wcs_item_sk) AS itemArray
+        |    FROM ${tmp_tbl}
+        |    GROUP BY sessionid
+        |    HAVING array_contains(itemArray, cast(${q02_item_sk} AS BIGINT) )
+        |  ) collectedList
+        |) pairs
+        |WHERE item_sk_1 <> ${q02_item_sk}
+        |GROUP BY item_sk_1
+        |ORDER BY
+        |  cnt DESC,
+        |  item_sk_1
+        |LIMIT ${q02_limit}
+        |""".stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 2, queryContent, header)
     //  clean
     spark.sql("DROP TEMPORARY FUNCTION makePairs")
-    spark.catalog.dropTempView(tmp_tbl)
   }
 
-  val run_q3 = (spark: SparkSession, vid: Int) => {
+  val run_q3 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(3, vid)
-    val q03_limit = Paras.q03_limit_list(i1)
-    val q03_purchased_item_IN = Paras.q03_purchased_item_IN_list(i2)
-
-    println(s"The default paramters for template 3 are: q03_limit = ${Paras.q03_limit_list(0)}, " +
-      s"q03_purchased_item_IN = ${Paras.q03_purchased_item_IN_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q03_limit = $q03_limit, q03_purchased_item_IN = $q03_purchased_item_IN")
-    }
-
-    spark.sql(
+    val q03_purchased_item_IN = q03_purchased_item_IN_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT purchased_item, lastviewed_item, COUNT(*) AS cnt
          |FROM
@@ -240,117 +222,91 @@ object Queries {
          |    -- * products viewed within 'q03_days_before_purchase' days before the purchase date
          |    -- * consider only purchase of specific item
          |    -- * only the last 5 products that where viewed before a sale
-         |    USING 'python q03_filterLast_N_viewedItmes_within_y_days.py ${Paras.q03_days_in_sec_before_purchase} ${Paras.q03_views_before_purchase} ${q03_purchased_item_IN}'
+         |    USING 'python q03_filterLast_N_viewedItmes_within_y_days.py ${q03_days_in_sec_before_purchase} ${q03_views_before_purchase} ${q03_purchased_item_IN}'
          |    AS (purchased_item BIGINT, lastviewed_item BIGINT)
          |  ) lastViewSessions
          |  WHERE i.i_item_sk = lastViewSessions.lastviewed_item
-         |  AND i.i_category_id IN (${Paras.q03_purchased_item_category_IN}) --Only products in certain categories
+         |  AND i.i_category_id IN (${q03_purchased_item_category_IN}) --Only products in certain categories
          |  CLUSTER BY lastviewed_item,purchased_item -- pre-cluster to speed up following group by and count()
          |) distributed
          |GROUP BY purchased_item,lastviewed_item
          |ORDER BY cnt DESC, purchased_item, lastviewed_item
          |--DISTRIBUTE BY lastviewed_item SORT BY cnt DESC, purchased_item, lastviewed_item --cluster parallel sorting
          |LIMIT ${q03_limit}
-      """.stripMargin).collect()
+      """.stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 3, queryContent, header)
   }
 
-  val run_q4 = (spark: SparkSession, vid: Int) => {
+  val run_q4 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(4, vid)
-    val q04_wcs_click_date_upper = Paras.q04_wcs_click_date_upper_list(i1)
-    val q04_additional_time_pressure_rate = Paras.q04_additional_time_pressure_rate_list(i2)
-
-    println(s"The default paramters for template 4 are: q04_wcs_click_date_upper by default is = None, " +
-      s"q04_additional_time_pressure by default = ${Paras.q04_additional_time_pressure_rate_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q04_wcs_click_date_upper = $q04_wcs_click_date_upper, " +
-        s"q04_additional_time_pressure_rate = $q04_additional_time_pressure_rate")
-    }
+    val q04_session_timeout_inSec = q04_session_timeout_inSec_list(vid - 1)
 
     val tmp_tbl = "tmp_tbl"
-    val tmp_df = spark.sql(
+    val queryContent =
       s"""
-         |FROM
-         |(
-         |  SELECT
-         |    c.wcs_user_sk,
-         |    w.wp_type,
-         |    (wcs_click_date_sk * 24 * 60 * 60 + wcs_click_time_sk) AS tstamp_inSec
-         |  FROM web_clickstreams c, web_page w
-         |  WHERE c.wcs_web_page_sk = w.wp_web_page_sk
-         |  ${if (i1 > 0) s"AND c.wcs_click_date_sk <= ${q04_wcs_click_date_upper}" else ""}
-         |  AND   c.wcs_web_page_sk IS NOT NULL
-         |  AND   c.wcs_user_sk     IS NOT NULL
-         |  AND   c.wcs_sales_sk    IS NULL --abandoned implies: no sale
-         |  DISTRIBUTE BY wcs_user_sk SORT BY wcs_user_sk, tstamp_inSec
-         |) clicksAnWebPageType
-         |REDUCE
-         |  wcs_user_sk,
-         |  tstamp_inSec,
-         |  wp_type
-         |USING 'python q4_sessionize.py ${Paras.q04_session_timeout_inSec} ${q04_additional_time_pressure_rate}'
-         |AS (
-         |    wp_type STRING,
-         |    tstamp BIGINT, --we require timestamp in further processing to keep output deterministic cross multiple reducers
-         |    sessionid STRING
-         |)
-       """.stripMargin)
+        |with ${tmp_tbl} as (
+        |FROM
+        |(
+        |  SELECT
+        |    c.wcs_user_sk,
+        |    w.wp_type,
+        |    (wcs_click_date_sk * 24 * 60 * 60 + wcs_click_time_sk) AS tstamp_inSec
+        |  FROM web_clickstreams c, web_page w
+        |  WHERE c.wcs_web_page_sk = w.wp_web_page_sk
+        |  AND   c.wcs_web_page_sk IS NOT NULL
+        |  AND   c.wcs_user_sk     IS NOT NULL
+        |  AND   c.wcs_sales_sk    IS NULL --abandoned implies: no sale
+        |  DISTRIBUTE BY wcs_user_sk SORT BY wcs_user_sk, tstamp_inSec
+        |) clicksAnWebPageType
+        |REDUCE
+        |  wcs_user_sk,
+        |  tstamp_inSec,
+        |  wp_type
+        |USING 'python q4_sessionize.py ${q04_session_timeout_inSec}'
+        |AS (
+        |    wp_type STRING,
+        |    tstamp BIGINT, --we require timestamp in further processing to keep output deterministic cross multiple reducers
+        |    sessionid STRING
+        |)
+        |)
+        |
+        |SELECT SUM(pagecount) / COUNT(*)
+        |FROM
+        |(
+        |  FROM
+        |  (
+        |    SELECT *
+        |    FROM ${tmp_tbl} sessions
+        |    DISTRIBUTE BY sessionid SORT BY sessionid, tstamp, wp_type --required by "abandonment analysis script"
+        |  ) distributedSessions
+        |  REDUCE
+        |    wp_type,
+        |    --tstamp, --already sorted by time-stamp
+        |    sessionid --but we still need the sessionid within the script to identify session boundaries
+        |    -- script requires input tuples to be grouped by sessionid and ordered by timestamp ascending.
+        |    -- output one tuple: <pagecount> if a session's shopping cart is abandoned, else: nothing
+        |    USING 'python q4_abandonedShoppingCarts.py'
+        |    AS (pagecount BIGINT)
+        |) abandonedShoppingCartsPageCountsPerSession
+        |""".stripMargin
 
-    tmp_df.createOrReplaceTempView(tmp_tbl)
-
-    spark.sql(
-      s"""
-         |SELECT SUM(pagecount) / COUNT(*)
-         |FROM
-         |(
-         |  FROM
-         |  (
-         |    SELECT *
-         |    FROM ${tmp_tbl} sessions
-         |    DISTRIBUTE BY sessionid SORT BY sessionid, tstamp, wp_type --required by "abandonment analysis script"
-         |  ) distributedSessions
-         |  REDUCE
-         |    wp_type,
-         |    --tstamp, --already sorted by time-stamp
-         |    sessionid --but we still need the sessionid within the script to identify session boundaries
-         |    -- script requires input tuples to be grouped by sessionid and ordered by timestamp ascending.
-         |    -- output one tuple: <pagecount> if a session's shopping cart is abandoned, else: nothing
-         |    USING 'python q4_abandonedShoppingCarts.py'
-         |    AS (pagecount BIGINT)
-         |) abandonedShoppingCartsPageCountsPerSession
-       """.stripMargin).collect()
-
-    spark.catalog.dropTempView(tmp_tbl)
-
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 4, queryContent, header)
   }
 
-  val run_q5 = (spark: SparkSession, vid: Int) => {
+  val run_q5 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
+    val (q05_i_category, q05_cd_gender, q05_cd_education_status_IN, q05_lambda) = q05_list(vid - 1)
 
-    // [reversed] i1 x i2 = 5 x 8
-    val (i1, i2) = parse_vid(5, vid)
-    val q05_i_category = Paras.q05_i_category_list(i1)
-    val q05_lambda: String = Paras.q05_lambda_list(i2)
-
-    println(s"The default paramters for template 5 are: q05_i_category = ${Paras.q05_i_category_list(0)}, " +
-      s"q05_lambda = ${Paras.q05_lambda_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q05_i_category = $q05_i_category, q05_lambda = $q05_lambda")
-    }
-
-
-    // step 1: extract the input data
-    val rawData = spark.sql(
+    val queryContent =
       s"""
          |SELECT
          |  --wcs_user_sk,
          |  clicks_in_category,
-         |  CASE WHEN cd_education_status IN (${Paras.q05_cd_education_status_IN}) THEN 1 ELSE 0 END AS college_education,
-         |  CASE WHEN cd_gender = ${Paras.q05_cd_gender} THEN 1 ELSE 0 END AS male,
+         |  CASE WHEN cd_education_status IN (${q05_cd_education_status_IN}) THEN 1 ELSE 0 END AS college_education,
+         |  CASE WHEN cd_gender = ${q05_cd_gender} THEN 1 ELSE 0 END AS male,
          |  clicks_in_1,
          |  clicks_in_2,
          |  clicks_in_3,
@@ -376,320 +332,258 @@ object Queries {
          |)q05_user_clicks_in_cat
          |INNER JOIN customer ct ON wcs_user_sk = c_customer_sk
          |INNER JOIN customer_demographics ON c_current_cdemo_sk = cd_demo_sk
-       """.stripMargin)
-    rawData.cache()
-
-    // step 2: logistic regression with spark-mllib (DataFrame)
-    val options = Map(
-      'iter -> "20",
-//      'lambda -> "0.0",
-      'convergenceTol -> 1e-5.toString
-    )
-
-    import spark.implicits._
-    val average = rawData.select(mean($"clicks_in_category")).head().getDouble(0)
-    val data = rawData.withColumn("label", when($"clicks_in_category" > average, 1.0d).otherwise(0.0d))
-
-    // merge all columns except "clicks_in_category" into one vector
-    val vectorAssembler = new VectorAssembler()
-      .setInputCols(Array(
-        "college_education", "male",
-        "clicks_in_1", "clicks_in_2", "clicks_in_3", "clicks_in_4", "clicks_in_5", "clicks_in_6", "clicks_in_7"))
-      .setOutputCol("features")
-
-    //train model with data using LBFGS LogisticRegression
-    val logisticRegression = new LogisticRegressionSpark()
-      .setLabelCol("label")
-      .setFeaturesCol("features")
-      .setMaxIter(options('iter).toInt)
-      .setRegParam(q05_lambda.toDouble)
-      .setTol(options('convergenceTol).toDouble)
-
-    val pipeline = new Pipeline().setStages(Array(vectorAssembler, logisticRegression))
-
-//    println("Training Model")
-    val model = pipeline.fit(data)
-
-//    println("Predict with model")
-    val predictions = model.transform(data)
-
-    predictions.cache()
-
-    val logitModel = model.stages(model.stages.length - 1).asInstanceOf[LogisticRegressionModel]
-    val summary = logitModel.binarySummary
-    val multMetrics = new MulticlassMetrics(
-      predictions.select($"prediction", $"label").rdd.map(r => (r.getDouble(0), r.getDouble(1)))
-    )
-
-    val auc = summary.areaUnderROC
-    val prec = multMetrics.weightedPrecision
-    val confMat = multMetrics.confusionMatrix
-
-    val metaInformation =
-      f"""Precision: $prec%.4f
-         |AUC: $auc%.4f
-         |Confusion Matrix:
-         |$confMat
          |""".stripMargin
+    if (!debug) {
+      // step 1: extract the input data
+      val rawData = spark.sql(queryContent)
+      rawData.cache()
 
-    println(metaInformation)
+      // step 2: logistic regression with spark-mllib (DataFrame)
+      val options = Map(
+        'iter -> "20",
+        //      'lambda -> "0.0",
+        'convergenceTol -> 1e-5.toString
+      )
 
-    rawData.unpersist()
-    predictions.unpersist()
+      import spark.implicits._
+      val average = rawData.select(mean($"clicks_in_category")).head().getDouble(0)
+      val data = rawData.withColumn("label", when($"clicks_in_category" > average, 1.0d).otherwise(0.0d))
+
+      // merge all columns except "clicks_in_category" into one vector
+      val vectorAssembler = new VectorAssembler()
+        .setInputCols(Array(
+          "college_education", "male",
+          "clicks_in_1", "clicks_in_2", "clicks_in_3", "clicks_in_4", "clicks_in_5", "clicks_in_6", "clicks_in_7"))
+        .setOutputCol("features")
+
+      //train model with data using LBFGS LogisticRegression
+      val logisticRegression = new LogisticRegressionSpark()
+        .setLabelCol("label")
+        .setFeaturesCol("features")
+        .setMaxIter(options('iter).toInt)
+        .setRegParam(q05_lambda.toDouble)
+        .setTol(options('convergenceTol).toDouble)
+
+      val pipeline = new Pipeline().setStages(Array(vectorAssembler, logisticRegression))
+
+      //    println("Training Model")
+      val model = pipeline.fit(data)
+
+      //    println("Predict with model")
+      val predictions = model.transform(data)
+
+      predictions.cache()
+
+      val logitModel = model.stages(model.stages.length - 1).asInstanceOf[LogisticRegressionModel]
+      val summary = logitModel.binarySummary
+      val multMetrics = new MulticlassMetrics(
+        predictions.select($"prediction", $"label").rdd.map(r => (r.getDouble(0), r.getDouble(1)))
+      )
+
+      val auc = summary.areaUnderROC
+      val prec = multMetrics.weightedPrecision
+      val confMat = multMetrics.confusionMatrix
+
+      val metaInformation =
+        f"""Precision: $prec%.4f
+           |AUC: $auc%.4f
+           |Confusion Matrix:
+           |$confMat
+           |""".stripMargin
+
+      println(metaInformation)
+
+      rawData.unpersist()
+      predictions.unpersist()
+    }
+    expose_logical_plan(spark, 5, queryContent, header)
   }
 
-  val run_q6 = (spark: SparkSession, vid: Int) => {
+  val run_q6 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(6, vid)
-    val q06_limit = Paras.q06_limit_list(i1)
-    val q06_year = Paras.q06_year_list(i2)
-
-    println(s"The default paramters for template 6 are: q06_limit = ${Paras.q06_limit_list(0)}, " +
-      s"q06_year = ${Paras.q06_year_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q06_limit = $q06_limit, q06_year = $q06_year")
-    }
-
-
+    val q06_year = q06_year_list(vid - 1)
     val tmp_tbl1 = "tmp_tbl1"
     val tmp_tbl2 = "tmp_tbl2"
-
-    val tmp_df1 = spark.sql(
+    val queryContent =
       s"""
-         |SELECT ss_customer_sk AS customer_sk,
-         |       sum( case when (d_year = ${q06_year})   THEN (((ss_ext_list_price-ss_ext_wholesale_cost-ss_ext_discount_amt)+ss_ext_sales_price)/2)  ELSE 0 END) first_year_total,
-         |       sum( case when (d_year = ${q06_year}+1) THEN (((ss_ext_list_price-ss_ext_wholesale_cost-ss_ext_discount_amt)+ss_ext_sales_price)/2)  ELSE 0 END) second_year_total
-         |FROM  store_sales
-         |     ,date_dim
-         |WHERE ss_sold_date_sk = d_date_sk
-         |AND   d_year BETWEEN ${q06_year} AND ${q06_year} +1
-         |GROUP BY ss_customer_sk
-         |HAVING first_year_total > 0
-       """.stripMargin
-    )
-    tmp_df1.createOrReplaceTempView(tmp_tbl1)
+        |with ${tmp_tbl1} as (
+        |SELECT ss_customer_sk AS customer_sk,
+        |       sum( case when (d_year = ${q06_year})   THEN (((ss_ext_list_price-ss_ext_wholesale_cost-ss_ext_discount_amt)+ss_ext_sales_price)/2)  ELSE 0 END) first_year_total,
+        |       sum( case when (d_year = ${q06_year}+1) THEN (((ss_ext_list_price-ss_ext_wholesale_cost-ss_ext_discount_amt)+ss_ext_sales_price)/2)  ELSE 0 END) second_year_total
+        |FROM  store_sales
+        |     ,date_dim
+        |WHERE ss_sold_date_sk = d_date_sk
+        |AND   d_year BETWEEN ${q06_year} AND ${q06_year} +1
+        |GROUP BY ss_customer_sk
+        |HAVING first_year_total > 0
+        |)
+        |
+        |with ${tmp_tbl2} as (
+        |SELECT ws_bill_customer_sk AS customer_sk ,
+        |       sum( case when (d_year = ${q06_year})   THEN (((ws_ext_list_price-ws_ext_wholesale_cost-ws_ext_discount_amt)+ws_ext_sales_price)/2)   ELSE 0 END) first_year_total,
+        |       sum( case when (d_year = ${q06_year}+1) THEN (((ws_ext_list_price-ws_ext_wholesale_cost-ws_ext_discount_amt)+ws_ext_sales_price)/2)   ELSE 0 END) second_year_total
+        |FROM web_sales
+        |    ,date_dim
+        |WHERE ws_sold_date_sk = d_date_sk
+        |AND   d_year BETWEEN ${q06_year} AND ${q06_year} +1
+        |GROUP BY ws_bill_customer_sk
+        |HAVING first_year_total > 0
+        |)
+        |
+        |SELECT
+        |      (web.second_year_total / web.first_year_total) AS web_sales_increase_ratio,
+        |      c_customer_sk,
+        |      c_first_name,
+        |      c_last_name,
+        |      c_preferred_cust_flag,
+        |      c_birth_country,
+        |      c_login,
+        |      c_email_address
+        |FROM ${tmp_tbl1} store,
+        |     ${tmp_tbl2} web,
+        |     customer c
+        |WHERE store.customer_sk = web.customer_sk
+        |AND   web.customer_sk = c_customer_sk
+        |-- if customer has sales in first year for both store and websales, select him only if web second_year_total/first_year_total ratio is bigger then his store second_year_total/first_year_total ratio.
+        |AND   (web.second_year_total / web.first_year_total)  >  (store.second_year_total / store.first_year_total)
+        |ORDER BY
+        |  web_sales_increase_ratio DESC,
+        |  c_customer_sk,
+        |  c_first_name,
+        |  c_last_name,
+        |  c_preferred_cust_flag,
+        |  c_birth_country,
+        |  c_login
+        |LIMIT ${q06_limit}
+        |""".stripMargin
 
-    val tmp_df2 = spark.sql(
-      s"""
-         |SELECT ws_bill_customer_sk AS customer_sk ,
-         |       sum( case when (d_year = ${q06_year})   THEN (((ws_ext_list_price-ws_ext_wholesale_cost-ws_ext_discount_amt)+ws_ext_sales_price)/2)   ELSE 0 END) first_year_total,
-         |       sum( case when (d_year = ${q06_year}+1) THEN (((ws_ext_list_price-ws_ext_wholesale_cost-ws_ext_discount_amt)+ws_ext_sales_price)/2)   ELSE 0 END) second_year_total
-         |FROM web_sales
-         |    ,date_dim
-         |WHERE ws_sold_date_sk = d_date_sk
-         |AND   d_year BETWEEN ${q06_year} AND ${q06_year} +1
-         |GROUP BY ws_bill_customer_sk
-         |HAVING first_year_total > 0
-       """.stripMargin
-    )
-    tmp_df2.createOrReplaceTempView(tmp_tbl2)
-
-    spark.sql(
-      s"""
-         |SELECT
-         |      (web.second_year_total / web.first_year_total) AS web_sales_increase_ratio,
-         |      c_customer_sk,
-         |      c_first_name,
-         |      c_last_name,
-         |      c_preferred_cust_flag,
-         |      c_birth_country,
-         |      c_login,
-         |      c_email_address
-         |FROM ${tmp_tbl1} store,
-         |     ${tmp_tbl2} web,
-         |     customer c
-         |WHERE store.customer_sk = web.customer_sk
-         |AND   web.customer_sk = c_customer_sk
-         |-- if customer has sales in first year for both store and websales, select him only if web second_year_total/first_year_total ratio is bigger then his store second_year_total/first_year_total ratio.
-         |AND   (web.second_year_total / web.first_year_total)  >  (store.second_year_total / store.first_year_total)
-         |ORDER BY
-         |  web_sales_increase_ratio DESC,
-         |  c_customer_sk,
-         |  c_first_name,
-         |  c_last_name,
-         |  c_preferred_cust_flag,
-         |  c_birth_country,
-         |  c_login
-         |LIMIT ${q06_limit}
-       """.stripMargin).collect()
-
-    //  clean
-    spark.catalog.dropTempView(tmp_tbl1)
-    spark.catalog.dropTempView(tmp_tbl2)
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 6, queryContent, header)
   }
 
-  val run_q7 = (spark: SparkSession, vid: Int) => {
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(7, vid)
-    val q07_limit = Paras.q07_limit_list(i1)
-    val q07_year = Paras.q07_year_list(i2)
+  val run_q7 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    println(s"The default paramters for template 7 are: q07_limit = ${Paras.q07_limit_list(0)}, " +
-      s"q07_year = ${Paras.q07_year_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q07_limit = $q07_limit, q07_year = $q07_year")
-    }
-
+    val (q07_HIGHER_PRICE_RATIO, q07_year, q07_month) = q07_list(vid - 1)
     val tmp_tbl = "tmp_tbl"
-
-    val tmp_df = spark.sql(
+    val queryContent =
       s"""
-         |SELECT k.i_item_sk
-         |FROM item k,
-         |(
-         |  SELECT
-         |    i_category,
-         |    AVG(j.i_current_price) * ${Paras.q07_HIGHER_PRICE_RATIO} AS avg_price
-         |  FROM item j
-         |  GROUP BY j.i_category
-         |) avgCategoryPrice
-         |WHERE avgCategoryPrice.i_category = k.i_category
-         |AND k.i_current_price > avgCategoryPrice.avg_price
-       """.stripMargin)
-    tmp_df.createOrReplaceTempView(tmp_tbl)
-    spark.sql(
-      s"""
-         |SELECT
-         |  ca_state,
-         |  COUNT(*) AS cnt
-         |FROM
-         |  customer_address a,
-         |  customer c,
-         |  store_sales s,
-         |  ${tmp_tbl} highPriceItems
-         |WHERE a.ca_address_sk = c.c_current_addr_sk
-         |AND c.c_customer_sk = s.ss_customer_sk
-         |AND ca_state IS NOT NULL
-         |AND ss_item_sk = highPriceItems.i_item_sk --cannot use "ss_item_sk IN ()". Hive only supports a single "IN" subquery per SQL statement.
-         |AND s.ss_sold_date_sk IN
-         |( --during a given month
-         |  SELECT d_date_sk
-         |  FROM date_dim
-         |  WHERE d_year = ${q07_year}
-         |  AND d_moy = ${Paras.q07_MONTH}
-         |)
-         |GROUP BY ca_state
-         |HAVING cnt >= ${Paras.q07_HAVING_COUNT_GE} --at least 10 customers
-         |ORDER BY cnt DESC, ca_state --top 10 states in descending order
-         |limit ${q07_limit}
-       """.stripMargin).collect()
+        |with ${tmp_tbl} as (
+        |SELECT k.i_item_sk
+        |FROM item k,
+        |(
+        |  SELECT
+        |    i_category,
+        |    AVG(j.i_current_price) * ${q07_HIGHER_PRICE_RATIO} AS avg_price
+        |  FROM item j
+        |  GROUP BY j.i_category
+        |) avgCategoryPrice
+        |WHERE avgCategoryPrice.i_category = k.i_category
+        |AND k.i_current_price > avgCategoryPrice.avg_price
+        |)
+        |
+        |SELECT
+        |  ca_state,
+        |  COUNT(*) AS cnt
+        |FROM
+        |  customer_address a,
+        |  customer c,
+        |  store_sales s,
+        |  ${tmp_tbl} highPriceItems
+        |WHERE a.ca_address_sk = c.c_current_addr_sk
+        |AND c.c_customer_sk = s.ss_customer_sk
+        |AND ca_state IS NOT NULL
+        |AND ss_item_sk = highPriceItems.i_item_sk --cannot use "ss_item_sk IN ()". Hive only supports a single "IN" subquery per SQL statement.
+        |AND s.ss_sold_date_sk IN
+        |( --during a given month
+        |  SELECT d_date_sk
+        |  FROM date_dim
+        |  WHERE d_year = ${q07_year}
+        |  AND d_moy = ${q07_month}
+        |)
+        |GROUP BY ca_state
+        |HAVING cnt >= ${q07_HAVING_COUNT_GE} --at least 10 customers
+        |ORDER BY cnt DESC, ca_state --top 10 states in descending order
+        |limit ${q07_LIMIT}
+        |
+        |""".stripMargin
 
-
-    spark.catalog.dropTempView(tmp_tbl)
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 7, queryContent, header)
   }
 
-  val run_q8 = (spark: SparkSession, vid: Int) => {
+  val run_q8 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(8, vid)
-    val q08_startDate = Paras.q08_startDate_list(i1)
-    val q08_endDate = Paras.q08_endDate_list(i1)
-    val q08_seconds_before_purchase = Paras.q08_seconds_before_purchase_list(i2)
-
-    println(s"The default paramters for template 8 are: q08_startDate = ${Paras.q08_startDate_list(0)}, " +
-      s"q08_endDate = ${Paras.q08_endDate_list(0)}" +
-      s"q08_seconds_before_purchase = ${Paras.q08_seconds_before_purchase_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q08_startDate = $q08_startDate, q08_endDate = $q08_endDate, " +
-        s"q08_seconds_before_purchase = $q08_seconds_before_purchase")
-    }
+    val (q08_startDate, q08_endDate, q08_seconds_before_purchase) = q08_list(vid - 1)
 
     val tmp_tbl1 = "tmp_tbl1"
     val tmp_tbl2 = "tmp_tbl2"
     val tmp_tbl3 = "tmp_tbl3"
-
-    val tmp_df1 = spark.sql(
+    val queryContent =
       s"""
-         |SELECT d_date_sk
-         |FROM date_dim d
-         |WHERE d.d_date >= '${q08_startDate}'
-         |AND   d.d_date <= '${q08_endDate}'
-       """.stripMargin)
-    tmp_df1.createOrReplaceTempView(tmp_tbl1)
-
-    val tmp_df2 = spark.sql(
-      s"""
-         |SELECT DISTINCT wcs_sales_sk
-         |FROM ( -- sessionize clickstreams and filter "viewed reviews" by looking at the web_page page type using a python script
-         |  FROM ( -- select only webclicks in relevant time frame and get the type
-         |    SELECT  wcs_user_sk,
-         |            (wcs_click_date_sk * 86400L + wcs_click_time_sk) AS tstamp_inSec, --every wcs_click_date_sk equals one day => convert to seconds date*24*60*60=date*86400 and add time_sk
-         |            wcs_sales_sk,
-         |            wp_type
-         |    FROM web_clickstreams
-         |    LEFT SEMI JOIN ${tmp_tbl1} date_filter ON (wcs_click_date_sk = date_filter.d_date_sk and wcs_user_sk IS NOT NULL)
-         |    JOIN web_page w ON wcs_web_page_sk = w.wp_web_page_sk
-         |    --WHERE wcs_user_sk IS NOT NULL
-         |    DISTRIBUTE BY wcs_user_sk SORT BY wcs_user_sk,tstamp_inSec,wcs_sales_sk,wp_type -- cluster by uid and sort by tstamp required by following python script
-         |  ) q08_map_output
-         |  -- input: web_clicks in a given year
-         |  REDUCE  wcs_user_sk,
-         |          tstamp_inSec,
-         |          wcs_sales_sk,
-         |          wp_type
-         |  USING 'python q08_filter_sales_with_reviews_viewed_before.py review ${q08_seconds_before_purchase}'
-         |  AS (wcs_sales_sk BIGINT)
-         |) sales_which_read_reviews
-       """.stripMargin)
-    tmp_df2.createOrReplaceTempView(tmp_tbl2)
-
-    val tmp_df3 = spark.sql(
-      s"""
-         |SELECT ws_net_paid, ws_order_number
-         |FROM web_sales ws
-         |JOIN ${tmp_tbl1} d ON ( ws.ws_sold_date_sk = d.d_date_sk)
-       """.stripMargin)
-    tmp_df3.createOrReplaceTempView(tmp_tbl3)
-
-    spark.sql(
-      s"""
-         |SELECT
-         |  q08_review_sales.amount AS q08_review_sales_amount,
-         |  q08_all_sales.amount - q08_review_sales.amount AS no_q08_review_sales_amount
-         |-- both subqueries only contain a single line with the aggregated sum. Join on 1=1 to get both results into same line for calculating the difference of the two results
-         |FROM (
-         |  SELECT 1 AS id, SUM(ws_net_paid) as amount
-         |  FROM ${tmp_tbl3} allSalesInYear
-         |  LEFT SEMI JOIN ${tmp_tbl2} salesWithViewedReviews ON allSalesInYear.ws_order_number = salesWithViewedReviews.wcs_sales_sk
-         |) q08_review_sales
-         |JOIN (
-         |  SELECT 1 AS id, SUM(ws_net_paid) as amount
-         |  FROM ${tmp_tbl3} allSalesInYear
-         |) q08_all_sales
-         |ON q08_review_sales.id = q08_all_sales.id
-       """.stripMargin).collect()
-
-
-    spark.catalog.dropTempView(tmp_tbl1)
-    spark.catalog.dropTempView(tmp_tbl2)
-    spark.catalog.dropTempView(tmp_tbl3)
+        |with ${tmp_tbl1} as (
+        |SELECT d_date_sk
+        |FROM date_dim d
+        |WHERE d.d_date >= '${q08_startDate}'
+        |AND   d.d_date <= '${q08_endDate}'
+        |)
+        |
+        |with ${tmp_tbl2} as (
+        |SELECT DISTINCT wcs_sales_sk
+        |FROM ( -- sessionize clickstreams and filter "viewed reviews" by looking at the web_page page type using a python script
+        |  FROM ( -- select only webclicks in relevant time frame and get the type
+        |    SELECT  wcs_user_sk,
+        |            (wcs_click_date_sk * 86400L + wcs_click_time_sk) AS tstamp_inSec, --every wcs_click_date_sk equals one day => convert to seconds date*24*60*60=date*86400 and add time_sk
+        |            wcs_sales_sk,
+        |            wp_type
+        |    FROM web_clickstreams
+        |    LEFT SEMI JOIN ${tmp_tbl1} date_filter ON (wcs_click_date_sk = date_filter.d_date_sk and wcs_user_sk IS NOT NULL)
+        |    JOIN web_page w ON wcs_web_page_sk = w.wp_web_page_sk
+        |    --WHERE wcs_user_sk IS NOT NULL
+        |    DISTRIBUTE BY wcs_user_sk SORT BY wcs_user_sk,tstamp_inSec,wcs_sales_sk,wp_type -- cluster by uid and sort by tstamp required by following python script
+        |  ) q08_map_output
+        |  -- input: web_clicks in a given year
+        |  REDUCE  wcs_user_sk,
+        |          tstamp_inSec,
+        |          wcs_sales_sk,
+        |          wp_type
+        |  USING 'python q08_filter_sales_with_reviews_viewed_before.py review ${q08_seconds_before_purchase}'
+        |  AS (wcs_sales_sk BIGINT)
+        |) sales_which_read_reviews
+        |)
+        |
+        |with ${tmp_tbl3} as (
+        |SELECT ws_net_paid, ws_order_number
+        |FROM web_sales ws
+        |JOIN ${tmp_tbl1} d ON ( ws.ws_sold_date_sk = d.d_date_sk)
+        |)
+        |
+        |SELECT
+        |  q08_review_sales.amount AS q08_review_sales_amount,
+        |  q08_all_sales.amount - q08_review_sales.amount AS no_q08_review_sales_amount
+        |-- both subqueries only contain a single line with the aggregated sum. Join on 1=1 to get both results into same line for calculating the difference of the two results
+        |FROM (
+        |  SELECT 1 AS id, SUM(ws_net_paid) as amount
+        |  FROM ${tmp_tbl3} allSalesInYear
+        |  LEFT SEMI JOIN ${tmp_tbl2} salesWithViewedReviews ON allSalesInYear.ws_order_number = salesWithViewedReviews.wcs_sales_sk
+        |) q08_review_sales
+        |JOIN (
+        |  SELECT 1 AS id, SUM(ws_net_paid) as amount
+        |  FROM ${tmp_tbl3} allSalesInYear
+        |) q08_all_sales
+        |ON q08_review_sales.id = q08_all_sales.id
+        |
+        |""".stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 8, queryContent, header)
   }
 
-  val run_q9 = (spark: SparkSession, vid: Int) => {
+  val run_q9 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
+    val (q09_year, q09_marital_stauts) = q09_list(vid - 1)
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(9, vid)
-    val q09_year = Paras.q09_year_list(i1)
-    val q09_part1_marital_status = Paras.q09_marital_status_list(i2)
-    val q09_part2_marital_status = Paras.q09_marital_status_list(i2)
-    val q09_part3_marital_status = Paras.q09_marital_status_list(i2)
-
-    println(s"The default paramters for template 9 are: q09_year = ${Paras.q09_year_list(0)}, " +
-      s"q09_part[1-3]_marital_status = ${Paras.q09_marital_status_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q09_year = $q09_year, q09_part[1-3]_marital_status = $q09_part1_marital_status")
-    }
-
-    spark.sql(
+    val queryContent =
       s"""
          |SELECT SUM(ss1.ss_quantity)
          |FROM store_sales ss1, date_dim dd,customer_address ca1 , store s ,customer_demographics cd
@@ -702,96 +596,83 @@ object Queries {
          |AND
          |(
          |  (
-         |    cd.cd_marital_status = '${q09_part1_marital_status}'
-         |    AND cd.cd_education_status = '${Paras.q09_part1_education_status}'
-         |    AND ${Paras.q09_part1_sales_price_min} <= ss1.ss_sales_price
-         |    AND ss1.ss_sales_price <= ${Paras.q09_part1_sales_price_max}
+         |    cd.cd_marital_status = '${q09_marital_stauts}'
+         |    AND cd.cd_education_status = '${q09_part1_education_status}'
+         |    AND ${q09_part1_sales_price_min} <= ss1.ss_sales_price
+         |    AND ss1.ss_sales_price <= ${q09_part1_sales_price_max}
          |  )
          |  OR
          |  (
-         |    cd.cd_marital_status = '${q09_part2_marital_status}'
-         |    AND cd.cd_education_status = '${Paras.q09_part2_education_status}'
-         |    AND ${Paras.q09_part2_sales_price_min} <= ss1.ss_sales_price
-         |    AND ss1.ss_sales_price <= ${Paras.q09_part2_sales_price_max}
+         |    cd.cd_marital_status = '${q09_marital_stauts}'
+         |    AND cd.cd_education_status = '${q09_part2_education_status}'
+         |    AND ${q09_part2_sales_price_min} <= ss1.ss_sales_price
+         |    AND ss1.ss_sales_price <= ${q09_part2_sales_price_max}
          |  )
          |  OR
          |  (
-         |    cd.cd_marital_status = '${q09_part3_marital_status}'
-         |    AND cd.cd_education_status = '${Paras.q09_part3_education_status}'
-         |    AND ${Paras.q09_part3_sales_price_min} <= ss1.ss_sales_price
-         |    AND ss1.ss_sales_price <= ${Paras.q09_part3_sales_price_max}
+         |    cd.cd_marital_status = '${q09_marital_stauts}'
+         |    AND cd.cd_education_status = '${q09_part3_education_status}'
+         |    AND ${q09_part3_sales_price_min} <= ss1.ss_sales_price
+         |    AND ss1.ss_sales_price <= ${q09_part3_sales_price_max}
          |  )
          |)
          |AND
          |(
          |  (
-         |    ca1.ca_country = '${Paras.q09_part1_ca_country}'
-         |    AND ca1.ca_state IN (${Paras.q09_part1_ca_state_IN})
-         |    AND ${Paras.q09_part1_net_profit_min} <= ss1.ss_net_profit
-         |    AND ss1.ss_net_profit <= ${Paras.q09_part1_net_profit_max}
+         |    ca1.ca_country = '${q09_part1_ca_country}'
+         |    AND ca1.ca_state IN (${q09_part1_ca_state_IN})
+         |    AND ${q09_part1_net_profit_min} <= ss1.ss_net_profit
+         |    AND ss1.ss_net_profit <= ${q09_part1_net_profit_max}
          |  )
          |  OR
          |  (
-         |    ca1.ca_country = '${Paras.q09_part2_ca_country}'
-         |    AND ca1.ca_state IN (${Paras.q09_part2_ca_state_IN})
-         |    AND ${Paras.q09_part2_net_profit_min} <= ss1.ss_net_profit
-         |    AND ss1.ss_net_profit <= ${Paras.q09_part2_net_profit_max}
+         |    ca1.ca_country = '${q09_part2_ca_country}'
+         |    AND ca1.ca_state IN (${q09_part2_ca_state_IN})
+         |    AND ${q09_part2_net_profit_min} <= ss1.ss_net_profit
+         |    AND ss1.ss_net_profit <= ${q09_part2_net_profit_max}
          |  )
          |  OR
          |  (
-         |    ca1.ca_country = '${Paras.q09_part3_ca_country}'
-         |    AND ca1.ca_state IN (${Paras.q09_part3_ca_state_IN})
-         |    AND ${Paras.q09_part3_net_profit_min} <= ss1.ss_net_profit
-         |    AND ss1.ss_net_profit <= ${Paras.q09_part3_net_profit_max}
+         |    ca1.ca_country = '${q09_part3_ca_country}'
+         |    AND ca1.ca_state IN (${q09_part3_ca_state_IN})
+         |    AND ${q09_part3_net_profit_min} <= ss1.ss_net_profit
+         |    AND ss1.ss_net_profit <= ${q09_part3_net_profit_max}
          |  )
          |)
-       """.stripMargin).collect()
+       """.stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 9, queryContent, header)
+
   }
 
-  val run_q10 = (spark: SparkSession, vid: Int) => {
+  val run_q10 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // q10 only has one parameter. vid = 0 to 19 (included)
-    assert(vid >= 0 && vid < 20)
-    val q10_limit = Paras.q10_limit_list(vid)
-
-    println(s"The default paramters for template 10 are: q10_limit by default = None")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q10_limit = $q10_limit")
-    }
-
+    val (q10_pr_review_rating_IN, q10_startDate) = q10_list(vid - 1)
     spark.sql("CREATE TEMPORARY FUNCTION extract_sentiment AS 'io.bigdatabenchmark.v1.queries.q10.SentimentUDF'")
     // ADD LIMIT 1000, 3000, 10000
-    spark.sql(
+    val queryContent =
       s"""
-        |SELECT item_sk, review_sentence, sentiment, sentiment_word
-        |FROM (--wrap in additional FROM(), because Sorting/distribute by with UDTF in select clause is not allowed
-        |  SELECT extract_sentiment(pr_item_sk, pr_review_content) AS (item_sk, review_sentence, sentiment, sentiment_word)
-        |  FROM product_reviews
-        |) extracted
-        |ORDER BY item_sk,review_sentence,sentiment,sentiment_word
-        |${if (vid > 0) s"LIMIT $q10_limit" else ""}
-      """.stripMargin).collect()
+         |SELECT item_sk, review_sentence, sentiment, sentiment_word
+         |FROM (--wrap in additional FROM(), because Sorting/distribute by with UDTF in select clause is not allowed
+         |  SELECT extract_sentiment(pr_item_sk, pr_review_content) AS (item_sk, review_sentence, sentiment, sentiment_word)
+         |  FROM product_reviews
+         |  -- add by chenghao
+         |  WHERE pr_review_rating in (${q10_pr_review_rating_IN})
+         |  AND pr_review_date >= ${q10_startDate}
+         |) extracted
+         |ORDER BY item_sk,review_sentence,sentiment,sentiment_word
+         |""".stripMargin
 
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 10, queryContent, header)
     spark.sql("DROP TEMPORARY FUNCTION extract_sentiment")
   }
 
-  val run_q11 = (spark: SparkSession, vid: Int) => {
-
-    // q11 only has one parameter. vid = 0 to 19 (included)
-    val q11_startDate=Paras.q11_startDate_list(vid)
-    val q11_endDate=Paras.q11_endDate_list(vid)
-
-    println(s"The default paramters for template 11 are: q11_startDate = ${Paras.q11_startDate_list(0)}, " +
-      s"q11_endDate = ${Paras.q11_endDate_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q11_startDate = $q11_startDate, q11_endDate = $q11_endDate")
-    }
-
-    spark.sql(
+  val run_q11 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
+    val (q11_startDate, q11_endDate) = q11_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT corr(reviews_count,avg_rating)
          |FROM (
@@ -828,26 +709,16 @@ object Queries {
          |  ) s
          |  ON p.pr_item_sk = s.ws_item_sk
          |) q11_review_stats
-       """.stripMargin).collect()
-
+         |""".stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 11, queryContent, header)
   }
 
-  val run_q12 = (spark: SparkSession, vid: Int) => {
+  val run_q12 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // [reversed] i1 x i2 = 5 x 8
-    val (i1, i2) = parse_vid(12, vid)
-    val q12_i_category_IN = Paras.q12_i_category_IN_list(i1)
-    val q12_limit = Paras.q12_limit_list(i2)
-
-    println(s"The default paramters for template 12 are: q12_i_category_IN = ${Paras.q12_i_category_IN_list(0)}, " +
-      s"q12_limit by default = None")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q12_i_category_IN = $q12_i_category_IN, q12_limit = $q12_limit")
-    }
-
-    spark.sql(
+    val q12_i_category_IN = q12_i_category_IN_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT DISTINCT wcs_user_sk -- Find all customers
          |-- TODO check if 37134 is first day of the month
@@ -877,19 +748,22 @@ object Queries {
          |WHERE wcs_user_sk = ss_customer_sk
          |AND wcs_click_date_sk < ss_sold_date_sk -- buy AFTER viewed on website
          |ORDER BY wcs_user_sk
-         |${if (i2 > 0) s"LIMIT ${q12_limit}" else ""}
-       """.stripMargin).collect()
+       """.stripMargin
+
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 12, queryContent, header)
   }
 
-  val run_q13 = (spark: SparkSession, vid: Int) => {
+  val run_q13 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // [reversed] i1 x i2 = 5 x 8
     val (i1, i2) = parse_vid(13, vid)
-    val q13_year = Paras.q13_year_list(i1)
-    val q13_limit = Paras.q13_limit_list(i2)
+    val q13_year = q13_year_list(i1)
+    val q13_limit = q13_limit_list(i2)
 
-    println(s"The default paramters for template 13 are: q13_year = ${Paras.q13_year_list(0)}, " +
-      s"q13_limit = ${Paras.q13_limit_list(0)}")
+    println(s"The default paramters for template 13 are: q13_year = ${q13_year_list(0)}, " +
+      s"q13_limit = ${q13_limit_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -898,6 +772,59 @@ object Queries {
 
     val tmp_tbl1 = "tmp_tbl1"
     val tmp_tbl2 = "tmp_tbl2"
+    val queryContent =
+      s"""
+         |with ${tmp_tbl1} as (
+         |SELECT
+         |    ss.ss_customer_sk AS customer_sk,
+         |    sum( case when (d_year = ${q13_year})   THEN ss_net_paid  ELSE 0 END) first_year_total,
+         |    sum( case when (d_year = ${q13_year}+1) THEN ss_net_paid  ELSE 0 END) second_year_total
+         |FROM store_sales ss
+         |JOIN (
+         |  SELECT d_date_sk, d_year
+         |  FROM date_dim d
+         |  WHERE d.d_year in (${q13_year}, (${q13_year} + 1))
+         |) dd on ( ss.ss_sold_date_sk = dd.d_date_sk )
+         |GROUP BY ss.ss_customer_sk
+         |HAVING first_year_total > 0
+         |)
+         |
+         |with ${tmp_tbl2} as (
+         |SELECT
+         |       ws.ws_bill_customer_sk AS customer_sk,
+         |       sum( case when (d_year = ${q13_year})   THEN ws_net_paid  ELSE 0 END) first_year_total,
+         |       sum( case when (d_year = ${q13_year}+1) THEN ws_net_paid  ELSE 0 END) second_year_total
+         |FROM web_sales ws
+         |JOIN (
+         |  SELECT d_date_sk, d_year
+         |  FROM date_dim d
+         |  WHERE d.d_year in (${q13_year}, (${q13_year} + 1) )
+         |) dd ON ( ws.ws_sold_date_sk = dd.d_date_sk )
+         |GROUP BY ws.ws_bill_customer_sk
+         |HAVING first_year_total > 0
+         |)
+         |
+         |SELECT
+         |      c_customer_sk,
+         |      c_first_name,
+         |      c_last_name,
+         |      (store.second_year_total / store.first_year_total) AS storeSalesIncreaseRatio ,
+         |      (web.second_year_total / web.first_year_total) AS webSalesIncreaseRatio
+         |FROM ${tmp_tbl1} store ,
+         |     ${tmp_tbl2} web ,
+         |     customer c
+         |WHERE store.customer_sk = web.customer_sk
+         |AND   web.customer_sk = c_customer_sk
+         |-- if customer has sales in first year for both store and websales, select him only if web second_year_total/first_year_total ratio is bigger then his store second_year_total/first_year_total ratio.
+         |AND   (web.second_year_total / web.first_year_total)  >  (store.second_year_total / store.first_year_total)
+         |ORDER BY
+         |  webSalesIncreaseRatio DESC,
+         |  c_customer_sk,
+         |  c_first_name,
+         |  c_last_name
+         |LIMIT ${q13_limit}
+         |
+         |""".stripMargin
 
     val tmp_df1 = spark.sql(
       s"""
@@ -960,16 +887,16 @@ object Queries {
     spark.catalog.dropTempView(tmp_tbl2)
   }
 
-  val run_q14 = (spark: SparkSession, vid: Int) => {
+  val run_q14 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(14, vid)
-    val q14_dependents = Paras.q14_dependents_list(i1)
-    val q14_content_len_min = Paras.q14_content_len_min_list(i2)
-    val q14_content_len_max = Paras.q14_content_len_max_list(i2)
+    val q14_dependents = q14_dependents_list(i1)
+    val q14_content_len_min = q14_content_len_min_list(i2)
+    val q14_content_len_max = q14_content_len_max_list(i2)
 
-    println(s"The default paramters for template 14 are: q14_dependents = ${Paras.q14_dependents_list(0)}, " +
-      s"q14_content_len_min = ${Paras.q14_content_len_min_list(0)}, q14_content_len_max = ${Paras.q14_content_len_max_list(0)}")
+    println(s"The default paramters for template 14 are: q14_dependents = ${q14_dependents_list(0)}, " +
+      s"q14_content_len_min = ${q14_content_len_min_list(0)}, q14_content_len_max = ${q14_content_len_max_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -986,8 +913,8 @@ object Queries {
          |  JOIN household_demographics hd ON hd.hd_demo_sk = ws.ws_ship_hdemo_sk
          |  AND hd.hd_dep_count = ${q14_dependents}
          |  JOIN time_dim td ON td.t_time_sk = ws.ws_sold_time_sk
-         |  AND td.t_hour >= ${Paras.q14_morning_startHour}
-         |  AND td.t_hour <= ${Paras.q14_morning_endHour}
+         |  AND td.t_hour >= ${q14_morning_startHour}
+         |  AND td.t_hour <= ${q14_morning_endHour}
          |  JOIN web_page wp ON wp.wp_web_page_sk = ws.ws_web_page_sk
          |  AND wp.wp_char_count >= ${q14_content_len_min}
          |  AND wp.wp_char_count <= ${q14_content_len_max}
@@ -998,8 +925,8 @@ object Queries {
          |  JOIN household_demographics hd ON ws.ws_ship_hdemo_sk = hd.hd_demo_sk
          |  AND hd.hd_dep_count = ${q14_dependents}
          |  JOIN time_dim td ON td.t_time_sk = ws.ws_sold_time_sk
-         |  AND td.t_hour >= ${Paras.q14_evening_startHour}
-         |  AND td.t_hour <= ${Paras.q14_evening_endHour}
+         |  AND td.t_hour >= ${q14_evening_startHour}
+         |  AND td.t_hour <= ${q14_evening_endHour}
          |  JOIN web_page wp ON wp.wp_web_page_sk = ws.ws_web_page_sk
          |  AND wp.wp_char_count >= ${q14_content_len_min}
          |  AND wp.wp_char_count <= ${q14_content_len_max}
@@ -1007,16 +934,16 @@ object Queries {
        """.stripMargin).collect()
   }
 
-  val run_q15 = (spark: SparkSession, vid: Int) => {
+  val run_q15 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(15, vid)
-    val q15_startDate = Paras.q15_startDate_list(i1)
-    val q15_endDate = Paras.q15_endDate_list(i1)
-    val q15_store_sk = Paras.q15_store_sk_list(i2)
+    val q15_startDate = q15_startDate_list(i1)
+    val q15_endDate = q15_endDate_list(i1)
+    val q15_store_sk = q15_store_sk_list(i2)
 
-    println(s"The default paramters for template 15 are: q15_startDate = ${Paras.q15_startDate_list(0)}, " +
-      s"q15_endDate = ${Paras.q15_endDate_list(0)}, q15_store_sk = ${Paras.q15_store_sk_list(0)}")
+    println(s"The default paramters for template 15 are: q15_startDate = ${q15_startDate_list(0)}, " +
+      s"q15_endDate = ${q15_endDate_list(0)}, q15_store_sk = ${q15_store_sk_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -1058,15 +985,15 @@ object Queries {
        """.stripMargin).collect()
   }
 
-  val run_q16 = (spark: SparkSession, vid: Int) => {
+  val run_q16 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // [reversed] i1 x i2 = 5 x 8
     val (i1, i2) = parse_vid(16, vid)
-    val q16_date = Paras.q16_date_list(i1)
-    val q16_limit = Paras.q16_limit_list(i2)
+    val q16_date = q16_date_list(i1)
+    val q16_limit = q16_limit_list(i2)
 
-    println(s"The default paramters for template 16 are: q16_date = ${Paras.q16_date_list(0)}, " +
-      s"q16_limit = ${Paras.q16_limit_list(0)}")
+    println(s"The default paramters for template 16 are: q16_date = ${q16_date_list(0)}, " +
+      s"q16_limit = ${q16_limit_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -1104,15 +1031,15 @@ object Queries {
        """.stripMargin).collect()
   }
 
-  val run_q17 = (spark: SparkSession, vid: Int) => {
+  val run_q17 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(17, vid)
-    val q17_month = Paras.q17_month_list(i1)
-    val q17_i_category_IN = Paras.q17_i_category_IN_list(i2)
+    val q17_month = q17_month_list(i1)
+    val q17_i_category_IN = q17_i_category_IN_list(i2)
 
-    println(s"The default paramters for template 17 are: q17_month = ${Paras.q17_month_list(0)}, " +
-      s"q17_i_category_IN = ${Paras.q17_i_category_IN_list(0)}")
+    println(s"The default paramters for template 17 are: q17_month = ${q17_month_list(0)}, " +
+      s"q17_i_category_IN = ${q17_i_category_IN_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -1131,10 +1058,10 @@ object Queries {
          |  JOIN promotion p ON ss.ss_promo_sk = p.p_promo_sk
          |  JOIN customer c ON ss.ss_customer_sk = c.c_customer_sk
          |  JOIN customer_address ca ON c.c_current_addr_sk = ca.ca_address_sk
-         |  WHERE ca_gmt_offset = ${Paras.q17_gmt_offset}
-         |  AND s_gmt_offset = ${Paras.q17_gmt_offset}
+         |  WHERE ca_gmt_offset = ${q17_gmt_offset}
+         |  AND s_gmt_offset = ${q17_gmt_offset}
          |  AND i_category IN (${q17_i_category_IN})
-         |  AND d_year = ${Paras.q17_year}
+         |  AND d_year = ${q17_year}
          |  AND d_moy = ${q17_month}
          |  AND (p_channel_dmail = 'Y' OR p_channel_email = 'Y' OR p_channel_tv = 'Y')
          |) promotional_sales
@@ -1147,10 +1074,10 @@ object Queries {
          |  JOIN promotion p ON ss.ss_promo_sk = p.p_promo_sk
          |  JOIN customer c ON ss.ss_customer_sk = c.c_customer_sk
          |  JOIN customer_address ca ON c.c_current_addr_sk = ca.ca_address_sk
-         |  WHERE ca_gmt_offset = ${Paras.q17_gmt_offset}
-         |  AND s_gmt_offset = ${Paras.q17_gmt_offset}
+         |  WHERE ca_gmt_offset = ${q17_gmt_offset}
+         |  AND s_gmt_offset = ${q17_gmt_offset}
          |  AND i_category IN (${q17_i_category_IN})
-         |  AND d_year = ${Paras.q17_year}
+         |  AND d_year = ${q17_year}
          |  AND d_moy = ${q17_month}
          |) all_sales
          |-- we don't need a 'ON' join condition. result is just two numbers.
@@ -1160,16 +1087,16 @@ object Queries {
 
   }
 
-  val run_q18 = (spark: SparkSession, vid: Int) => {
+  val run_q18 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // [reversed] i1 x i2 = 5 x 8
     val (i1, i2) = parse_vid(18, vid)
-    val q18_startDate = Paras.q18_startDate_list(i1)
-    val q18_endDate = Paras.q18_endDate_list(i1)
-    val q18_limit = Paras.q18_limit_list(i2)
+    val q18_startDate = q18_startDate_list(i1)
+    val q18_endDate = q18_endDate_list(i1)
+    val q18_limit = q18_limit_list(i2)
 
-    println(s"The default paramters for template 18 are: q18_startDate = ${Paras.q18_startDate_list(0)}, " +
-      s"q18_endDate = ${Paras.q18_endDate_list(0)}, " +
+    println(s"The default paramters for template 18 are: q18_startDate = ${q18_startDate_list(0)}, " +
+      s"q18_endDate = ${q18_endDate_list(0)}, " +
       s"q18_limit by default = None")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
@@ -1254,16 +1181,16 @@ object Queries {
 
   }
 
-  val run_q19 = (spark: SparkSession, vid: Int) => {
+  val run_q19 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // [reversed] i1 x i2 = 5 x 8
     val (i1, i2) = parse_vid(19, vid)
-    val q19_storeReturns_date_IN = Paras.q19_storeReturns_date_IN_list(i1)
-    val q19_webReturns_date_IN = Paras.q19_webReturns_date_IN_list(i1)
-    val q19_store_return_limit = Paras.q19_store_return_limit_list(i2)
+    val q19_storeReturns_date_IN = q19_storeReturns_date_IN_list(i1)
+    val q19_webReturns_date_IN = q19_webReturns_date_IN_list(i1)
+    val q19_store_return_limit = q19_store_return_limit_list(i2)
 
-    println(s"The default paramters for template 19 are: q19_storeReturns_date_IN = ${Paras.q19_storeReturns_date_IN_list(0)}, " +
-      s"q19_webReturns_date_IN = ${Paras.q19_webReturns_date_IN_list(0)}, +" +
+    println(s"The default paramters for template 19 are: q19_storeReturns_date_IN = ${q19_storeReturns_date_IN_list(0)}, " +
+      s"q19_webReturns_date_IN = ${q19_webReturns_date_IN_list(0)}, +" +
       s"q19_store_return_limit by default = None")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
@@ -1331,15 +1258,15 @@ object Queries {
 
   }
 
-  val run_q20 = (spark: SparkSession, vid: Int) => {
+  val run_q20 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(20, vid)
-    val q20_numclust: String = Paras.q20_numclust_list(i1)
-    val q20_iter: String = Paras.q20_iter_list(i2)
+    val q20_numclust: String = q20_numclust_list(i1)
+    val q20_iter: String = q20_iter_list(i2)
 
-    println(s"The default paramters for template 20 are: q20_numclust = ${Paras.q20_numclust_list(0)}, " +
-      s"q20_iter = ${Paras.q20_iter_list(0)}")
+    println(s"The default paramters for template 20 are: q20_numclust = ${q20_numclust_list(0)}, " +
+      s"q20_iter = ${q20_iter_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -1439,15 +1366,15 @@ object Queries {
     data.unpersist()
   }
 
-  val run_q21 = (spark: SparkSession, vid: Int) => {
+  val run_q21 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // [reversed] i1 x i2 = 5 x 8
     val (i1, i2) = parse_vid(21, vid)
-    val q21_year = Paras.q21_year_list(i1)
-    val q21_limit = Paras.q21_limit_list(i2)
+    val q21_year = q21_year_list(i1)
+    val q21_limit = q21_limit_list(i2)
 
-    println(s"The default paramters for template 21 are: q21_year = ${Paras.q21_year_list(0)}, " +
-      s"q21_limit = ${Paras.q21_limit_list(0)}")
+    println(s"The default paramters for template 21 are: q21_year = ${q21_year_list(0)}, " +
+      s"q21_limit = ${q21_limit_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -1475,7 +1402,7 @@ object Queries {
          |	  store_returns sr,
          |	  date_dim d2
          |	WHERE d2.d_year = ${q21_year}
-         |	AND d2.d_moy BETWEEN ${Paras.q21_month} AND ${Paras.q21_month} + 6 --which were returned in the next six months
+         |	AND d2.d_moy BETWEEN ${q21_month} AND ${q21_month} + 6 --which were returned in the next six months
          | 	AND sr.sr_returned_date_sk = d2.d_date_sk
          |) part_sr
          |INNER JOIN (
@@ -1503,7 +1430,7 @@ object Queries {
          |    store_sales ss,
          |    date_dim d1
          |  WHERE d1.d_year = ${q21_year}
-         |  AND d1.d_moy = ${Paras.q21_month}
+         |  AND d1.d_moy = ${q21_month}
          |  AND ss.ss_sold_date_sk = d1.d_date_sk
          |) part_ss ON (
          |  part_ss.ss_ticket_number = part_sr.sr_ticket_number
@@ -1530,15 +1457,15 @@ object Queries {
        """.stripMargin).collect()
   }
 
-  val run_q22 = (spark: SparkSession, vid: Int) => {
+  val run_q22 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(22, vid)
-    val q22_date = Paras.q22_date_list(i1)
-    val q22_i_current_price_min = Paras.q22_i_current_price_min_list(i2)
+    val q22_date = q22_date_list(i1)
+    val q22_i_current_price_min = q22_i_current_price_min_list(i2)
 
-    println(s"The default paramters for template 22 are: q22_date = ${Paras.q22_date_list(0)}, " +
-      s"q22_i_current_price_min = ${Paras.q22_i_current_price_min_list(0)}")
+    println(s"The default paramters for template 22 are: q22_date = ${q22_date_list(0)}, " +
+      s"q22_i_current_price_min = ${q22_i_current_price_min_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -1562,7 +1489,7 @@ object Queries {
          |  item i,
          |  warehouse w,
          |  date_dim d
-         |WHERE i_current_price BETWEEN ${q22_i_current_price_min} AND ${Paras.q22_i_current_price_max}
+         |WHERE i_current_price BETWEEN ${q22_i_current_price_min} AND ${q22_i_current_price_max}
          |AND i_item_sk        = inv_item_sk
          |AND inv_warehouse_sk = w_warehouse_sk
          |AND inv_date_sk      = d_date_sk
@@ -1577,15 +1504,15 @@ object Queries {
        """.stripMargin).collect()
   }
 
-  val run_q23 = (spark: SparkSession, vid: Int) => {
+  val run_q23 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(23, vid)
-    val q23_year = Paras.q23_year_list(i1)
-    val q23_month = Paras.q23_month_list(i2)
+    val q23_year = q23_year_list(i1)
+    val q23_month = q23_month_list(i2)
 
-    println(s"The default paramters for template 23 are: q23_year = ${Paras.q23_year_list(0)}, " +
-      s"q23_month = ${Paras.q23_month_list(0)}")
+    println(s"The default paramters for template 23 are: q23_year = ${q23_year_list(0)}, " +
+      s"q23_month = ${q23_month_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -1627,7 +1554,7 @@ object Queries {
          |) q23_tmp_inv_part
          |--JOIN warehouse w ON inv_warehouse_sk = w.w_warehouse_sk
          |WHERE mean > 0 --avoid "div by 0"
-         |  AND stdev/mean >= ${Paras.q23_coefficient}
+         |  AND stdev/mean >= ${q23_coefficient}
        """.stripMargin)
 
     tmp_df.createOrReplaceTempView(tmp_tbl)
@@ -1658,14 +1585,14 @@ object Queries {
 
   }
 
-  val run_q24 = (spark: SparkSession, vid: Int) => {
+  val run_q24 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(24, vid)
-    val q24_i_item_sk = Paras.q24_i_item_sk_list(i1)
-    val q24_limit = Paras.q24_limit_list(i2)
+    val q24_i_item_sk = q24_i_item_sk_list(i1)
+    val q24_limit = q24_limit_list(i2)
 
-    println(s"The default paramters for template 24 are: q24_i_item_sk = ${Paras.q24_i_item_sk_list(0)}, " +
+    println(s"The default paramters for template 24 are: q24_i_item_sk = ${q24_i_item_sk_list(0)}, " +
       s"q24_limit by default = None")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
@@ -1742,15 +1669,15 @@ object Queries {
 
   }
 
-  val run_q25 = (spark: SparkSession, vid: Int) => {
+  val run_q25 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(25, vid)
-    val q25_date = Paras.q25_date_list(i1)
-    val q25_numcluster : String= Paras.q25_numcluster_list(i2)
+    val q25_date = q25_date_list(i1)
+    val q25_numcluster : String= q25_numcluster_list(i2)
 
-    println(s"The default paramters for template 25 are: q25_date = ${Paras.q25_date_list(0)}, " +
-      s"q25_numcluster = ${Paras.q25_numcluster_list(0)}")
+    println(s"The default paramters for template 25 are: q25_date = ${q25_date_list(0)}, " +
+      s"q25_numcluster = ${q25_numcluster_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -1861,15 +1788,15 @@ object Queries {
 
   }
 
-  val run_q26 = (spark: SparkSession, vid: Int) => {
+  val run_q26 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // [reversed] i1 x i2 = 5 x 8
     val (i1, i2) = parse_vid(26, vid)
-    val q26_i_category_IN = Paras.q26_i_category_IN_list(i1)
-    val q26_numcluster : String = Paras.q26_numcluster_list(i2)
+    val q26_i_category_IN = q26_i_category_IN_list(i1)
+    val q26_numcluster : String = q26_numcluster_list(i2)
 
-    println(s"The default paramters for template 26 are: q26_i_category_IN = ${Paras.q26_i_category_IN_list(0)}, " +
-      s"q26_numcluster = ${Paras.q26_numcluster_list(0)}")
+    println(s"The default paramters for template 26 are: q26_i_category_IN = ${q26_i_category_IN_list(0)}, " +
+      s"q26_numcluster = ${q26_numcluster_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -1903,7 +1830,7 @@ object Queries {
          |  AND ss.ss_customer_sk IS NOT NULL
          |)
          |GROUP BY ss.ss_customer_sk
-         |HAVING count(ss.ss_item_sk) > ${Paras.q26_count_ss_item_sk}
+         |HAVING count(ss.ss_item_sk) > ${q26_count_ss_item_sk}
          |--CLUSTER BY cid --cluster by preceded by group by is silently ignored by hive but fails in spark
          |ORDER BY cid
        """.stripMargin)
@@ -1962,14 +1889,14 @@ object Queries {
     data.unpersist()
   }
 
-  val run_q27 = (spark: SparkSession, vid: Int) => {
+  val run_q27 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // [reversed] i1 x i2 = 5 x 8
     val (i1, i2) = parse_vid(27, vid)
-    val q27_pr_item_sk = Paras.q27_pr_item_sk_list(i1)
-    val q27_limit = Paras.q27_limit_list(i2)
+    val q27_pr_item_sk = q27_pr_item_sk_list(i1)
+    val q27_limit = q27_limit_list(i2)
 
-    println(s"The default paramters for template 27 are: q27_pr_item_sk = ${Paras.q27_pr_item_sk_list(0)}, " +
+    println(s"The default paramters for template 27 are: q27_pr_item_sk = ${q27_pr_item_sk_list(0)}, " +
       s"q27_limit by default = None")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
@@ -1998,15 +1925,15 @@ object Queries {
     spark.sql("DROP TEMPORARY FUNCTION find_company")
   }
 
-  val run_q28 = (spark: SparkSession, vid: Int) => {
+  val run_q28 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(28, vid)
-    val q28_lambda : String = Paras.q28_lambda_list(i1)
-    val q28_additional_time_pressure_rate = Paras.q28_additional_time_pressure_rate_list(i2)
+    val q28_lambda : String = q28_lambda_list(i1)
+    val q28_additional_time_pressure_rate = q28_additional_time_pressure_rate_list(i2)
 
-    println(s"The default paramters for template 28 are: q28_lambda by default is = ${Paras.q28_lambda_list(0)}, " +
-      s"q28_additional_time_pressure_rate by default = ${Paras.q28_additional_time_pressure_rate_list(0)}")
+    println(s"The default paramters for template 28 are: q28_lambda by default is = ${q28_lambda_list(0)}, " +
+      s"q28_additional_time_pressure_rate by default = ${q28_additional_time_pressure_rate_list(0)}")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
     } else {
@@ -2134,14 +2061,14 @@ object Queries {
 
   }
 
-  val run_q29 = (spark: SparkSession, vid: Int) => {
+  val run_q29 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(29, vid)
-    val q29_limit = Paras.q29_limit_list(i1)
-    val q29_ws_quantity_upper = Paras.q29_ws_quantity_upper_list(i2)
+    val q29_limit = q29_limit_list(i1)
+    val q29_ws_quantity_upper = q29_ws_quantity_upper_list(i2)
 
-    println(s"The default paramters for template 29 are: q29_limit = ${Paras.q29_limit_list(0)}, " +
+    println(s"The default paramters for template 29 are: q29_limit = ${q29_limit_list(0)}, " +
       s"q29_ws_quantity_upper by default = None")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
@@ -2181,14 +2108,14 @@ object Queries {
 
   }
 
-  val run_q30 = (spark: SparkSession, vid: Int) => {
+  val run_q30 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
     // i1 x i2 = 8 x 5
     val (i1, i2) = parse_vid(30, vid)
-    val q30_limit = Paras.q30_limit_list(i1)
-    val q30_wcs_click_date_upper = Paras.q30_wcs_click_date_upper_list(i2)
+    val q30_limit = q30_limit_list(i1)
+    val q30_wcs_click_date_upper = q30_wcs_click_date_upper_list(i2)
 
-    println(s"The default paramters for template 30 are: q30_limit = ${Paras.q30_limit_list(0)}, " +
+    println(s"The default paramters for template 30 are: q30_limit = ${q30_limit_list(0)}, " +
       s"q30_wcs_click_date_upper by default = None")
     if (vid == 0) {
       println(s"---> Current: IS default parameters!")
@@ -2221,7 +2148,7 @@ object Queries {
          |    wcs_user_sk,
          |    tstamp_inSec,
          |    i_category_id
-         |  USING 'python q30-sessionize.py ${Paras.q30_session_timeout_inSec}'
+         |  USING 'python q30-sessionize.py ${q30_session_timeout_inSec}'
          |  AS (
          |    category_id BIGINT,
          |    sessionid STRING
