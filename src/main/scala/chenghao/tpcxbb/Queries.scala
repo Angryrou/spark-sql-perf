@@ -15,72 +15,12 @@ import java.io.PrintWriter
 
 object Queries {
 
-  def div(dividend: Int, divisor: Int) = {
-    val q = dividend / divisor
-    val mod = dividend % divisor
-    (q, mod)
-  }
-
-  /*
-  type A template (with 1 parameters) q10 and q11, we expend the previous 3 choices to 20
-
-  type B template (with 2 parameters): 5x8 or 8x5
-  - For 5x8, we expend the previous 9 choices to 40 as:
-    | *0   | *1   | *2   | 9    | 10   |
-    | *3   | *4   | *5   | 11   | 12   |
-    | *6   | *7   | *8   | 13   | 14   |
-    | 15   | 16   | 17   | 18   | 19   |
-    | 20   | ...  |      |      |      |
-    | 35   | 36   | 37   | 38   | 39   |
-
-  - For 8x5, we expend the previous one as:
-    | *0   | *1   | *2   | 15   | 20   | 35   |
-    | *3   | *4   | *5   | 16   | ...  | 36   |
-    | *6   | *7   | *8   | 17   |      | 37   |
-    | 9    | 11   | 13   | 18   |      | 38   |
-    | 10   | 12   | 14   | 19   |      | 39   |
-  */
-
-
-  val type_b_2 = Set(5, 12, 13, 16, 18, 19, 21, 26, 27) // type_b_2 means i1 x i2 = 5 x 8, the reversed version
-  val type_b_1_map = Map(9 -> (0, 3), 10 -> (0, 4),
-    11 -> (1, 3), 12 -> (1, 4),
-    13 -> (2, 3), 14 -> (2, 4)
-  )
-
-  def parse_vid(qid: Int, vid: Int) = {
-    assert(vid >=1 && vid <= 100)
-    var i1 = -1
-    var i2 = -1
-    if (vid < 9) {
-      val rets = div(vid, 3)
-      i1 = rets._1
-      i2 = rets._2
-    } else if (vid < 15) {
-      val rets = type_b_1_map.getOrElse(vid, (-1, -1))
-      i1 = rets._1
-      i2 = rets._2
-    } else {
-      val rets = div(vid, 5)
-      i1 = rets._1
-      i2 = rets._2
-    }
-    if (type_b_2.contains(qid)) {
-      val tmp = i1
-      i1 = i2
-      i2 = tmp
-    }
-    assert(i1 >= 0 && i2 >= 0)
-    (i1, i2)
-  }
-
   def expose_logical_plan(spark: SparkSession, qid: Int, queryContent: String, header: String): Unit = {
     val logicPlan = spark.sql("explain cost " + queryContent).head().getString(0)
     new java.io.File(s"${header}/${qid}").mkdirs
     val filename = s"${header}/${qid}/${spark.sparkContext.appName}.txt"
     new PrintWriter(filename) { write(logicPlan); close }
   }
-
 
   val run_q1 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
@@ -416,9 +356,9 @@ object Queries {
         |AND   d_year BETWEEN ${q06_year} AND ${q06_year} +1
         |GROUP BY ss_customer_sk
         |HAVING first_year_total > 0
-        |)
+        |),
         |
-        |with ${tmp_tbl2} as (
+        |${tmp_tbl2} as (
         |SELECT ws_bill_customer_sk AS customer_sk ,
         |       sum( case when (d_year = ${q06_year})   THEN (((ws_ext_list_price-ws_ext_wholesale_cost-ws_ext_discount_amt)+ws_ext_sales_price)/2)   ELSE 0 END) first_year_total,
         |       sum( case when (d_year = ${q06_year}+1) THEN (((ws_ext_list_price-ws_ext_wholesale_cost-ws_ext_discount_amt)+ws_ext_sales_price)/2)   ELSE 0 END) second_year_total
@@ -527,9 +467,9 @@ object Queries {
         |FROM date_dim d
         |WHERE d.d_date >= '${q08_startDate}'
         |AND   d.d_date <= '${q08_endDate}'
-        |)
+        |),
         |
-        |with ${tmp_tbl2} as (
+        |${tmp_tbl2} as (
         |SELECT DISTINCT wcs_sales_sk
         |FROM ( -- sessionize clickstreams and filter "viewed reviews" by looking at the web_page page type using a python script
         |  FROM ( -- select only webclicks in relevant time frame and get the type
@@ -552,8 +492,8 @@ object Queries {
         |  AS (wcs_sales_sk BIGINT)
         |) sales_which_read_reviews
         |)
-        |
-        |with ${tmp_tbl3} as (
+        |,
+        |${tmp_tbl3} as (
         |SELECT ws_net_paid, ws_order_number
         |FROM web_sales ws
         |JOIN ${tmp_tbl1} d ON ( ws.ws_sold_date_sk = d.d_date_sk)
@@ -777,8 +717,8 @@ object Queries {
          |GROUP BY ss.ss_customer_sk
          |HAVING first_year_total > 0
          |)
-         |
-         |with ${tmp_tbl2} as (
+         |,
+         |${tmp_tbl2} as (
          |SELECT
          |       ws.ws_bill_customer_sk AS customer_sk,
          |       sum( case when (d_year = ${q13_year})   THEN ws_net_paid  ELSE 0 END) first_year_total,
@@ -1022,8 +962,8 @@ object Queries {
          |  WHERE slope <= 0--flat or declining sales
          |  AND s.s_store_sk = regression_analysis.ss_store_sk
          |)
-         |
-         |with ${tmp_tbl2} as (
+         |,
+         |${tmp_tbl2} as (
          |SELECT
          |  CONCAT(s_store_sk,"_", s_store_name ) AS store_ID, --this could be any string we want to identify the store. but as store_sk is just a number and store_name is ambiguous we choose the concatenation of both
          |  pr_review_date,
