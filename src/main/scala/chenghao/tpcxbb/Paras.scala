@@ -35,7 +35,7 @@ object Paras {
 
   //  Q4
 //  val q04_session_timeout_inSec = 3600
-  val q04_session_timeout_inSec_list = List.range(1800, 7800, 60)
+  val q04_session_timeout_inSec_list = 1800 to 7800 by 60
 
   //  Q5
   //  val q05_i_category="'Books'"
@@ -172,87 +172,118 @@ object Paras {
   ) yield (i, (i.split("-")(0).toInt + 1).toString + i.slice(4, 10), j)
 
   //  Q16
-  val q16_date_list = List("2001-03-16", "2001-02-16", "2001-04-16", "2001-02-26", "2001-03-26")
-  // add by chenghao
-  val q16_limit_list = List(100, 50, 150, 70, 80, 90, 110, 120)
+  val q16_date_list = for(
+    i <- 1 to 12;
+    j <- 1 to 20
+  ) yield (f"2001-${i}%02d-${j}%02d")
 
   //  Q17
   val q17_gmt_offset = "-5"
-  val q17_year = 2001
-  val q17_month_list = List(12, 8, 4, 1, 3, 5, 7, 9)
-  //  val q17_i_category_IN="'Books', 'Music'"
+  val q17_year_list = 2001 to 2002
+  val q17_month_list = 1 to 10
   val q17_i_category_IN_list = List("'Books', 'Music'", "'Books', 'Electronics'", "'Electronics', 'Music'",
     "'Music', 'Home & Kitchen'", "'Music', 'Toys & Games'")
+  val q17_list = for (
+    i <- q17_year_list;
+    j <- q17_month_list;
+    k <- q17_i_category_IN_list
+  ) yield (i, j, k)
 
   //  Q18
-  val q18_startDate_list = List("2001-05-02", "2001-09-02", "2012-01-02", "2001-07-02", "2001-11-02")
-  val q18_endDate_list = List("2001-09-02", "2012-01-02", "2012-05-02", "2001-11-02", "2001-03-02")
-  // add by chenghao
-  val q18_limit_list = List(-1, 1000, 100, 200, 300, 400, 500, 600)
-
+  val q18_start_year_list = 2000 to 2004
+  val q18_start_month_list = 1 to 5
+  val q18_month_gaps = 3 to 6
+  val q18_list = for (
+    y <- q18_start_year_list;
+    m <- q18_start_month_list;
+    g <- q18_month_gaps
+  ) yield (f"${y}-${m}%02d-02", f"${y}-${m+g}%02d-02")
 
   //  Q19
-  //  val q19_storeReturns_date_IN="'2004-03-08' ,'2004-08-02' ,'2004-11-15', '2004-12-20'"
-  val q19_storeReturns_date_IN_list = List("'2004-03-08' ,'2004-08-02' ,'2004-11-15', '2004-12-20'",
-    "'2004-03-09' ,'2004-08-03' ,'2004-11-16', '2004-12-21'", "'2004-03-10' ,'2004-08-04' ,'2004-11-17', '2004-12-22'",
-    "'2004-03-11' ,'2004-08-05' ,'2004-11-18', '2004-12-23'", "'2004-03-12' ,'2004-08-06' ,'2004-11-19', '2004-12-24'")
-
-  val q19_webReturns_date_IN_list = List("'2004-03-08' ,'2004-08-02' ,'2004-11-15', '2004-12-20'",
-    "'2004-03-09' ,'2004-08-03' ,'2004-11-16', '2004-12-21'", "'2004-03-10' ,'2004-08-04' ,'2004-11-17', '2004-12-22'",
-    "'2004-03-11' ,'2004-08-05' ,'2004-11-18', '2004-12-23'", "'2004-03-12' ,'2004-08-06' ,'2004-11-19', '2004-12-24'")
-  val q19_store_return_limit_list = List(-1, 100, 50, 65, 70, 75, 80, 85)
+  val q19_mondays = List("2004-01-05", "2004-02-09", "2004-03-08", "2004-04-12", "2004-05-24", "2004-06-21",
+    "2004-08-02", "2004-11-15", "2004-12-20")
+  val q19_date_IN_list = q19_mondays.combinations(4).map(_.map(x => s"'${x}'").mkString(",")).toList
 
   //  Q20
-  val q20_numclust_list = List("8", "4", "12", "5", "6", "7", "9", "10")
-  val q20_iter_list = List("20", "30", "10", "25", "15")
+  val q20_numclust_list = (3 to 12).map(_.toString).toList
+  val q20_iter_list = (10 to 50 by 4).map(_.toString).toList
+  val q20_list = for (
+    i <- q20_numclust_list;
+    j <- q20_iter_list
+  ) yield (i, j)
 
   //  Q21
-  val q21_year_list = List(2003, 2004, 2005, 2001, 2002)
-  val q21_month = 1
-  val q21_limit_list = List(100, 50, 150, 70, 80, 90, 110, 120)
+  val q21_year_list = 1995 to 2004
+  val q21_month_list = 1 to 10
+  val q21_limit = 100
+  val q21_list = for (
+    i <- q21_year_list;
+    j <- q21_month_list
+  ) yield (i, j)
 
   //  Q22
-  val q22_date_list = List("2001-05-08", "2001-05-09", "2001-05-10",
-    "2001-05-11", "2001-05-12", "2001-05-07", "2001-05-06", "2001-05-05")
-  val q22_i_current_price_min_list = List(0.98, 0.88, 1.08, 0.93, 1.03)
-  val q22_i_current_price_max = 1.5
+  val q22_date_list = (1 to 20).map(d => f"2001-05-${d}%02d")
+  val q22_i_current_price_min = 0.98
+  val q22_i_current_price_max_list = (0 to 4).map(x => x * 10 + 1.5)
+  val q22_list = for (
+    i <- q22_date_list;
+    j <- q22_i_current_price_max_list
+  ) yield (i, j)
 
   // Q23
-  val q23_year_list = List(2001, 2002, 2003, 1999, 2000, 2004, 2005, 2006)
-  val q23_month_list = List(1, 2, 3, 4, 5)
-  val q23_coefficient = 1.3
+  val q23_year_list = 2001 to 2005
+  val q23_month_list = 1 to 10
+  val q23_coefficient_list = List(1.2, 1.3)
+  val q23_list = for (
+    i <- q23_year_list;
+    j <- q23_month_list;
+    k <- q23_coefficient_list
+  ) yield (i, j, k)
 
   //  Q24
-  val q24_i_item_sk_list = List(10000, 10001, 10007, 10002, 10003, 10004, 10005, 10006)
-  val q24_limit_list = List(-1, 4, 2, 1, 3)
+  val q24_i_item_sk_list = 10000 to 10200 by 2
 
   //  Q25
-  val q25_date_list = List("2002-01-02", "2002-01-03", "2002-01-04",
-    "2002-01-05", "2002-01-06", "2002-01-07", "2002-01-08", "2002-01-09")
-  val q25_numcluster_list = List("8", "4", "12", "6", "10")
+  val q25_date_list = (1 to 20).map(x => f"2002-01-${x}%02d")
+  val q25_numcluster_list = (4 to 12 by 2).map(_.toString)
+  val q25_list = for (
+    i <- q25_date_list;
+    j <- q25_numcluster_list
+  ) yield (i, j)
+
 
   //  Q26
-  val q26_i_category_IN_list = List("'Books'", "'Electronics'", "'Music'",
-    "'Movies & TV'", "'Clothing & Accessories'")
+  val q26_i_category_IN_list = i_categories.combinations(1).map(_.map(x => s"'${x}'").mkString(",")).toList ++
+    i_categories.combinations(2).map(_.map(x => s"'${x}'").mkString(",")).toList
   val q26_count_ss_item_sk = 5
-  val q26_numcluster_list = List("8", "4", "12", "5", "6", "7", "9", "10")
+  val q26_numcluster_list = List("4", "6", "8", "10", "12")
+  val q26_list = for (
+    i <- q26_i_category_IN_list;
+    j <- q26_numcluster_list
+  ) yield (i, j)
 
   //  Q27
-  val q27_pr_item_sk_list = List(10002, 10003, 10004, 10005, 10006)
-  val q27_limit_list = List(-1, 500, 100, 200, 300, 400, 250, 350)
+  val q27_pr_item_sk_list = 10000 to 10200 by 2
 
   //  Q28
-  val q28_lambda_list = List("0.0", "0.5", "1.0", "0.2", "0.3", "0.4", "0.6", "0.7")
-  val q28_additional_time_pressure_rate_list = List(0, 0.5, 1, 0.25, 0.75)
+  val q28_lambda_list = List("1.0", "0.8", "0.6", "0.4", "0.2")
+  val q28_pr_review_rating_IN_list = pr_review_ratings.combinations(5).map(_.mkString(",")).toList ++
+    pr_review_ratings.combinations(4).map(_.mkString(",")).toList ++
+    pr_review_ratings.combinations(3).map(_.mkString(",")).toList ++
+    pr_review_ratings.combinations(2).map(_.mkString(",")).toList
+  val q28_list = for (
+    i <- q28_lambda_list;
+    j <- q28_pr_review_rating_IN_list
+  ) yield (i, j)
+
 
   //  Q29
-  val q29_limit_list = List(100, 50, 100, 70, 80, 90, 110, 120)
-  val q29_ws_quantity_upper_list = List(-1, 15, 10, 8, 12)
+  val q29_limit = 100
+  val q29_i_category_id_IN_list = i_category_ids.combinations(9).map(_.mkString(",")).toList ++ i_category_ids.combinations(8).map(_.mkString(",")).toList ++  i_category_ids.combinations(7).map(_.mkString(",")).toList ++  i_category_ids.combinations(6).map(_.mkString(",")).toList
 
   //  Q30
-  val q30_limit_list = List(100, 50, 100, 70, 80, 90, 110, 120)
-  val q30_wcs_click_date_upper_list = List(-1, 38097, 37497, 37670, 38355)
-  val q30_session_timeout_inSec = 3600
+  val q30_limit = 100
+  val q30_session_timeout_inSec_list = 1800 to 7800 by 60
 
 
 }

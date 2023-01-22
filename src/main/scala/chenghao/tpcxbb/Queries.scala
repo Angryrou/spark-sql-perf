@@ -899,20 +899,8 @@ object Queries {
 
   val run_q16 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // [reversed] i1 x i2 = 5 x 8
-    val (i1, i2) = parse_vid(16, vid)
-    val q16_date = q16_date_list(i1)
-    val q16_limit = q16_limit_list(i2)
-
-    println(s"The default paramters for template 16 are: q16_date = ${q16_date_list(0)}, " +
-      s"q16_limit = ${q16_limit_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q16_date = $q16_date, q16_limit = $q16_limit")
-    }
-
-    spark.sql(
+    val q16_date = q16_date_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT w_state, i_item_id,
          |  SUM(
@@ -939,26 +927,17 @@ object Queries {
          |GROUP BY w_state,i_item_id
          |--original was ORDER BY w_state,i_item_id , but CLUSTER BY is hives cluster scale counter part
          |ORDER BY w_state,i_item_id
-         |LIMIT ${q16_limit}
-       """.stripMargin).collect()
+         |LIMIT 100
+       """.stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 16, queryContent, header)
   }
 
   val run_q17 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(17, vid)
-    val q17_month = q17_month_list(i1)
-    val q17_i_category_IN = q17_i_category_IN_list(i2)
-
-    println(s"The default paramters for template 17 are: q17_month = ${q17_month_list(0)}, " +
-      s"q17_i_category_IN = ${q17_i_category_IN_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q17_month = $q17_month, q17_i_category_IN = $q17_i_category_IN")
-    }
-
-    spark.sql(
+    val (q17_year, q17_month, q17_i_category_IN) = q17_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT promotions, total, promotions / total * 100
          |FROM (
@@ -995,36 +974,23 @@ object Queries {
          |-- we don't need a 'ON' join condition. result is just two numbers.
          |ORDER BY promotions, total
          |LIMIT 100
-       """.stripMargin).collect()
+       """.stripMargin
+
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 17, queryContent, header)
 
   }
 
   val run_q18 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // [reversed] i1 x i2 = 5 x 8
-    val (i1, i2) = parse_vid(18, vid)
-    val q18_startDate = q18_startDate_list(i1)
-    val q18_endDate = q18_endDate_list(i1)
-    val q18_limit = q18_limit_list(i2)
-
-    println(s"The default paramters for template 18 are: q18_startDate = ${q18_startDate_list(0)}, " +
-      s"q18_endDate = ${q18_endDate_list(0)}, " +
-      s"q18_limit by default = None")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q18_startDate = $q18_startDate, q18_endDate = $q18_endDate, " +
-        s"q18_limit = $q18_limit")
-    }
-
-
+    val (q18_startDate, q18_endDate) = q18_list(vid - 1)
     spark.sql("CREATE TEMPORARY FUNCTION extract_NegSentiment AS 'io.bigdatabenchmark.v1.queries.q18.NegativeSentimentUDF'")
-
     val tmp_tbl1 = "tmp_tbl1"
     val tmp_tbl2 = "tmp_tbl2"
-
-    val tmp_df1 = spark.sql(
+    val queryContent =
       s"""
+         |with ${tmp_tbl1} as (
          |  SELECT s.s_store_sk, s.s_store_name
          |  FROM store s,
          |  (
@@ -1055,14 +1021,9 @@ object Queries {
          |  ) regression_analysis
          |  WHERE slope <= 0--flat or declining sales
          |  AND s.s_store_sk = regression_analysis.ss_store_sk
-       """.stripMargin)
-    tmp_df1.createOrReplaceTempView(tmp_tbl1)
-
-    tmp_df1.cache()
-    tmp_df1.collect()
-
-    val tmp_df2 = spark.sql(
-      s"""
+         |)
+         |
+         |with ${tmp_tbl2} as (
          |SELECT
          |  CONCAT(s_store_sk,"_", s_store_name ) AS store_ID, --this could be any string we want to identify the store. but as store_sk is just a number and store_name is ambiguous we choose the concatenation of both
          |  pr_review_date,
@@ -1070,11 +1031,8 @@ object Queries {
          |-- THIS IS A CROSS JOIN! but fortunately the "stores_with_regression" table is very small
          |FROM product_reviews pr, ${tmp_tbl1} stores_with_regression
          |WHERE locate(lower(stores_with_regression.s_store_name), lower(pr.pr_review_content), 1) >= 1 --find store name in reviews
-       """.stripMargin)
-    tmp_df2.createOrReplaceTempView(tmp_tbl2)
-
-    spark.sql(
-      s"""
+         |)
+         |
          |SELECT s_name, r_date, r_sentence, sentiment, sentiment_word
          |FROM ( --wrap in additional FROM(), because Sorting/distribute by with UDTF in select clause is not allowed
          |  --negative sentiment analysis of found reviews for stores with declining sales
@@ -1082,37 +1040,23 @@ object Queries {
          |  FROM ${tmp_tbl2}
          |) extracted
          |ORDER BY s_name, r_date, r_sentence, sentiment,sentiment_word
-         |${if (i2 > 0) s"LIMIT ${q18_limit}" else ""}
-       """.stripMargin).collect()
+         |""".stripMargin
 
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 18, queryContent, header)
     // clean
     spark.sql("DROP TEMPORARY FUNCTION extract_NegSentiment")
-    spark.catalog.dropTempView(tmp_tbl1)
-    spark.catalog.dropTempView(tmp_tbl2)
-    tmp_df1.unpersist()
 
   }
 
   val run_q19 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // [reversed] i1 x i2 = 5 x 8
-    val (i1, i2) = parse_vid(19, vid)
-    val q19_storeReturns_date_IN = q19_storeReturns_date_IN_list(i1)
-    val q19_webReturns_date_IN = q19_webReturns_date_IN_list(i1)
-    val q19_store_return_limit = q19_store_return_limit_list(i2)
-
-    println(s"The default paramters for template 19 are: q19_storeReturns_date_IN = ${q19_storeReturns_date_IN_list(0)}, " +
-      s"q19_webReturns_date_IN = ${q19_webReturns_date_IN_list(0)}, +" +
-      s"q19_store_return_limit by default = None")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q19_storeReturns_date_IN = $q19_storeReturns_date_IN, q19_webReturns_date_IN = $q19_webReturns_date_IN, " +
-        s"q19_store_return_limit = $q19_store_return_limit")
-    }
+    val q19_storeReturns_date_IN = q19_date_IN_list(vid - 1)
+    val q19_webReturns_date_IN = q19_date_IN_list(vid - 1)
 
     spark.sql("CREATE TEMPORARY FUNCTION extract_sentiment AS 'io.bigdatabenchmark.v1.queries.q10.SentimentUDF'")
-    spark.sql(
+    val queryContent =
       s"""
          |SELECT *
          |FROM
@@ -1163,138 +1107,119 @@ object Queries {
          |WHERE sentiment= 'NEG' --if there are any major negative reviews.
          |--item_sk is skewed, but we need to sort by it. Technically we just expect a deterministic global sorting and not clustering by item_sk...so we could distribute by pr_review_sk
          |ORDER BY item_sk,review_sentence,sentiment,sentiment_word
-         |${if (i2 > 0) s"LIMIT ${q19_store_return_limit}" else ""}
-       """.stripMargin).collect()
+       """.stripMargin
+
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 19, queryContent, header)
     // clean
     spark.sql("DROP TEMPORARY FUNCTION extract_sentiment")
 
   }
 
   val run_q20 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
-
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(20, vid)
-    val q20_numclust: String = q20_numclust_list(i1)
-    val q20_iter: String = q20_iter_list(i2)
-
-    println(s"The default paramters for template 20 are: q20_numclust = ${q20_numclust_list(0)}, " +
-      s"q20_iter = ${q20_iter_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q20_numclust = $q20_numclust, q20_iter = $q20_iter")
-    }
-
-
-    // step 1: extract the input data
-    val data = spark.sql(
+    val (q20_numclust, q20_iter) = q20_list(vid - 1)
+    val queryContent =
       s"""
-         |SELECT
-         |  ss_customer_sk AS user_sk,
-         |  round(CASE WHEN ((returns_count IS NULL) OR (orders_count IS NULL) OR ((returns_count / orders_count) IS NULL) ) THEN 0.0 ELSE (returns_count / orders_count) END, 7) AS orderRatio,
-         |  round(CASE WHEN ((returns_items IS NULL) OR (orders_items IS NULL) OR ((returns_items / orders_items) IS NULL) ) THEN 0.0 ELSE (returns_items / orders_items) END, 7) AS itemsRatio,
-         |  round(CASE WHEN ((returns_money IS NULL) OR (orders_money IS NULL) OR ((returns_money / orders_money) IS NULL) ) THEN 0.0 ELSE (returns_money / orders_money) END, 7) AS monetaryRatio,
-         |  round(CASE WHEN ( returns_count IS NULL                                                                        ) THEN 0.0 ELSE  returns_count                 END, 0) AS frequency
-         |FROM
-         |  (
-         |    SELECT
-         |      ss_customer_sk,
-         |      -- return order ratio
-         |      COUNT(distinct(ss_ticket_number)) AS orders_count,
-         |      -- return ss_item_sk ratio
-         |      COUNT(ss_item_sk) AS orders_items,
-         |      -- return monetary amount ratio
-         |      SUM( ss_net_paid ) AS orders_money
-         |    FROM store_sales s
-         |    GROUP BY ss_customer_sk
-         |  ) orders
-         |  LEFT OUTER JOIN
-         |  (
-         |    SELECT
-         |      sr_customer_sk,
-         |      -- return order ratio
-         |      count(distinct(sr_ticket_number)) as returns_count,
-         |      -- return ss_item_sk ratio
-         |      COUNT(sr_item_sk) as returns_items,
-         |      -- return monetary amount ratio
-         |      SUM( sr_return_amt ) AS returns_money
-         |    FROM store_returns
-         |    GROUP BY sr_customer_sk
-         |  ) returned ON ss_customer_sk=sr_customer_sk
-         |ORDER BY user_sk
-       """.stripMargin)
-    data.cache()
+        |SELECT
+        |  ss_customer_sk AS user_sk,
+        |  round(CASE WHEN ((returns_count IS NULL) OR (orders_count IS NULL) OR ((returns_count / orders_count) IS NULL) ) THEN 0.0 ELSE (returns_count / orders_count) END, 7) AS orderRatio,
+        |  round(CASE WHEN ((returns_items IS NULL) OR (orders_items IS NULL) OR ((returns_items / orders_items) IS NULL) ) THEN 0.0 ELSE (returns_items / orders_items) END, 7) AS itemsRatio,
+        |  round(CASE WHEN ((returns_money IS NULL) OR (orders_money IS NULL) OR ((returns_money / orders_money) IS NULL) ) THEN 0.0 ELSE (returns_money / orders_money) END, 7) AS monetaryRatio,
+        |  round(CASE WHEN ( returns_count IS NULL                                                                        ) THEN 0.0 ELSE  returns_count                 END, 0) AS frequency
+        |FROM
+        |  (
+        |    SELECT
+        |      ss_customer_sk,
+        |      -- return order ratio
+        |      COUNT(distinct(ss_ticket_number)) AS orders_count,
+        |      -- return ss_item_sk ratio
+        |      COUNT(ss_item_sk) AS orders_items,
+        |      -- return monetary amount ratio
+        |      SUM( ss_net_paid ) AS orders_money
+        |    FROM store_sales s
+        |    GROUP BY ss_customer_sk
+        |  ) orders
+        |  LEFT OUTER JOIN
+        |  (
+        |    SELECT
+        |      sr_customer_sk,
+        |      -- return order ratio
+        |      count(distinct(sr_ticket_number)) as returns_count,
+        |      -- return ss_item_sk ratio
+        |      COUNT(sr_item_sk) as returns_items,
+        |      -- return monetary amount ratio
+        |      SUM( sr_return_amt ) AS returns_money
+        |    FROM store_returns
+        |    GROUP BY sr_customer_sk
+        |  ) returned ON ss_customer_sk=sr_customer_sk
+        |ORDER BY user_sk
+        |""".stripMargin
 
-    // step 2: Calculating KMeans with spark (DataFrame)
-//    var options = Map(
-//      'numclust -> "8",
-//      'iter -> "20"
-//    )
-    import spark.implicits._
+    if (!debug) {
+      // step 1: extract the input data
+      val data = spark.sql(queryContent)
+      data.cache()
 
-    // vectorize all columns except the first column
-    // (a, b, c, d, e) => (a, [b, c, d, e])
-    val assembler = new VectorAssembler()
-      .setInputCols(data.columns.tail)
-      .setOutputCol("features")
+      // step 2: Calculating KMeans with spark (DataFrame)
+      //    var options = Map(
+      //      'numclust -> "8",
+      //      'iter -> "20"
+      //    )
+      import spark.implicits._
 
-    val kmeans = new KMeans()
-      .setFeaturesCol(assembler.getOutputCol)
-      .setK(q20_numclust.toInt)
-      .setMaxIter(q20_iter.toInt)
-      .setInitMode("k-means||")
-      .setSeed(1234567890)
+      // vectorize all columns except the first column
+      // (a, b, c, d, e) => (a, [b, c, d, e])
+      val assembler = new VectorAssembler()
+        .setInputCols(data.columns.tail)
+        .setOutputCol("features")
 
-    val pipeline = new Pipeline()
-      .setStages(Array(assembler, kmeans))
+      val kmeans = new KMeans()
+        .setFeaturesCol(assembler.getOutputCol)
+        .setK(q20_numclust.toInt)
+        .setMaxIter(q20_iter.toInt)
+        .setInitMode("k-means||")
+        .setSeed(1234567890)
 
-    val model = pipeline.fit(data)
+      val pipeline = new Pipeline()
+        .setStages(Array(assembler, kmeans))
 
-    // result of the transformation and clustering
-    val predictions = model.transform(data)
+      val model = pipeline.fit(data)
 
-    // Evaluate clustering by computing Silhouette score
-    val evaluator = new ClusteringEvaluator()
+      // result of the transformation and clustering
+      val predictions = model.transform(data)
 
-    val silhouette = evaluator.evaluate(predictions)
+      // Evaluate clustering by computing Silhouette score
+      val evaluator = new ClusteringEvaluator()
 
-    // get the KMeansModel for meta information
-    val kMeansModel = model.stages(1).asInstanceOf[KMeansModel]
+      val silhouette = evaluator.evaluate(predictions)
 
-    // Evaluate clusterModel by computing Within Set Sum of Squared Errors
-    val clusterCenters = kMeansModel.clusterCenters
+      // get the KMeansModel for meta information
+      val kMeansModel = model.stages(1).asInstanceOf[KMeansModel]
 
-    //print and write clustering  metadata
-    val metaInformation =
-      s"""Clusters:
-         |
-         |Number of Clusters: ${clusterCenters.length}
-         |silhouette: $silhouette
-         |${clusterCenters.mkString("\n")}
-       """.stripMargin
-    println(metaInformation)
+      // Evaluate clusterModel by computing Within Set Sum of Squared Errors
+      val clusterCenters = kMeansModel.clusterCenters
 
-    // step 3: clean
-    data.unpersist()
+      //print and write clustering  metadata
+      val metaInformation =
+        s"""Clusters:
+           |
+           |Number of Clusters: ${clusterCenters.length}
+           |silhouette: $silhouette
+           |${clusterCenters.mkString("\n")}
+         """.stripMargin
+      println(metaInformation)
+
+      // step 3: clean
+      data.unpersist()
+    }
+    expose_logical_plan(spark, 20, queryContent, header)
+
   }
 
   val run_q21 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
-
-    // [reversed] i1 x i2 = 5 x 8
-    val (i1, i2) = parse_vid(21, vid)
-    val q21_year = q21_year_list(i1)
-    val q21_limit = q21_limit_list(i2)
-
-    println(s"The default paramters for template 21 are: q21_year = ${q21_year_list(0)}, " +
-      s"q21_limit = ${q21_limit_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q21_year = $q21_year, q21_limit = $q21_limit")
-    }
-
-
-    spark.sql(
+    val (q21_year, q21_month) = q21_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT
          |  part_i.i_item_id AS i_item_id,
@@ -1366,25 +1291,15 @@ object Queries {
          |  part_s.s_store_id,
          |  part_s.s_store_name
          |LIMIT ${q21_limit}
-       """.stripMargin).collect()
+       """.stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 21, queryContent, header)
   }
 
   val run_q22 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
-
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(22, vid)
-    val q22_date = q22_date_list(i1)
-    val q22_i_current_price_min = q22_i_current_price_min_list(i2)
-
-    println(s"The default paramters for template 22 are: q22_date = ${q22_date_list(0)}, " +
-      s"q22_i_current_price_min = ${q22_i_current_price_min_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q22_date = $q22_date, q22_i_current_price_min = $q22_i_current_price_min")
-    }
-
-    spark.sql(
+    val (q22_date, q22_i_current_price_max) = q22_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT
          |  w_warehouse_name,
@@ -1413,29 +1328,20 @@ object Queries {
          |AND inv_after / inv_before <= 3.0 / 2.0
          |ORDER BY w_warehouse_name, i_item_id
          |LIMIT 100
-       """.stripMargin).collect()
+       """.stripMargin
+
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 22, queryContent, header)
   }
 
   val run_q23 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
-
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(23, vid)
-    val q23_year = q23_year_list(i1)
-    val q23_month = q23_month_list(i2)
-
-    println(s"The default paramters for template 23 are: q23_year = ${q23_year_list(0)}, " +
-      s"q23_month = ${q23_month_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q23_year = $q23_year, q23_month = $q23_month")
-    }
-
-
+    val (q23_year, q23_month, q23_coefficient) = q23_list(vid - 1)
     val tmp_tbl = "tmp_tbl"
-
-    val tmp_df = spark.sql(
+    val queryContent =
       s"""
+         |with ${tmp_tbl} as
+         |(
          |SELECT
          |  inv_warehouse_sk,
          | -- w_warehouse_name,
@@ -1467,12 +1373,8 @@ object Queries {
          |--JOIN warehouse w ON inv_warehouse_sk = w.w_warehouse_sk
          |WHERE mean > 0 --avoid "div by 0"
          |  AND stdev/mean >= ${q23_coefficient}
-       """.stripMargin)
-
-    tmp_df.createOrReplaceTempView(tmp_tbl)
-
-    spark.sql(
-      s"""
+         |)
+         |
          |SELECT
          |  inv1.inv_warehouse_sk,
          |  inv1.inv_item_sk,
@@ -1490,32 +1392,19 @@ object Queries {
          |ORDER BY
          | inv1.inv_warehouse_sk,
          | inv1.inv_item_sk
-       """.stripMargin).collect()
-
-    // clean
-    spark.catalog.dropTempView(tmp_tbl)
-
+         |""".stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 23, queryContent, header)
   }
 
   val run_q24 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
-
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(24, vid)
-    val q24_i_item_sk = q24_i_item_sk_list(i1)
-    val q24_limit = q24_limit_list(i2)
-
-    println(s"The default paramters for template 24 are: q24_i_item_sk = ${q24_i_item_sk_list(0)}, " +
-      s"q24_limit by default = None")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q24_i_item_sk = $q24_i_item_sk, q24_limit = $q24_limit")
-    }
-
+    val q24_i_item_sk = q24_i_item_sk_list(vid - 1)
     val tmp_tbl = "tmp_tbl"
-
-    val tmp_df = spark.sql(
+    val queryContent =
       s"""
+         |with $tmp_tbl as
+         |(
          |SELECT
          |  i_item_sk,
          |  imp_sk,
@@ -1531,12 +1420,8 @@ object Queries {
          |         imp_sk,
          |         --imp_competitor, --add to compute cross_price_elasticity per competitor is instead of a single number
          |         imp_start_date
-         |${if (i2 > 0) s"LIMIT $q24_limit" else ""}
-       """.stripMargin)
-    tmp_df.createOrReplaceTempView(tmp_tbl)
-
-    spark.sql(
-      s"""
+         |)
+         |
          |SELECT ws_item_sk,
          |       --ws.imp_competitor, --add to compute cross_price_elasticity per competitor is instead of a single number
          |       avg ( (current_ss_quant + current_ws_quant - prev_ss_quant - prev_ws_quant) / ((prev_ss_quant + prev_ws_quant) * ws.price_change)) AS cross_price_elasticity
@@ -1574,33 +1459,24 @@ object Queries {
          |    ) ss
          | ON (ws.ws_item_sk = ss.ss_item_sk and ws.imp_sk = ss.imp_sk)
          |GROUP BY  ws.ws_item_sk
-       """.stripMargin).collect()
+         |
+         |""".stripMargin
 
-    // clean
-    spark.catalog.dropTempView(tmp_tbl)
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 24, queryContent, header)
 
   }
 
   val run_q25 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
-
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(25, vid)
-    val q25_date = q25_date_list(i1)
-    val q25_numcluster : String= q25_numcluster_list(i2)
-
-    println(s"The default paramters for template 25 are: q25_date = ${q25_date_list(0)}, " +
-      s"q25_numcluster = ${q25_numcluster_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q25_date = $q25_date, q25_numcluster = $q25_numcluster")
-    }
+    val (q25_date, q25_numcluster) = q25_list(vid - 1)
 
     // step 1: extract the input data
     val tmp_tbl = "tmp_tbl"
-
-    val tmp_df1 = spark.sql(
+    val queryContent =
       s"""
+         |with ${tmp_tbl} as (
+         |
          |SELECT
          |  ss_customer_sk                     AS cid,
          |  count(distinct ss_ticket_number)   AS frequency,
@@ -1611,9 +1487,9 @@ object Queries {
          |WHERE d.d_date > '${q25_date}'
          |AND ss_customer_sk IS NOT NULL
          |GROUP BY ss_customer_sk
-       """.stripMargin)
-    val tmp_df2 = spark.sql(
-      s"""
+         |
+         |union
+         |
          |SELECT
          |  ws_bill_customer_sk             AS cid,
          |  count(distinct ws_order_number) AS frequency,
@@ -1624,13 +1500,9 @@ object Queries {
          |WHERE d.d_date > '${q25_date}'
          |AND ws_bill_customer_sk IS NOT NULL
          |GROUP BY ws_bill_customer_sk
-       """.stripMargin)
-
-    val tmp_df = tmp_df1.union(tmp_df2)
-    tmp_df.createOrReplaceTempView(tmp_tbl)
-
-    val data = spark.sql(
-      s"""
+         |
+         |)
+         |
          |SELECT
          |  -- rounding of values not necessary
          |  cid            AS cid,
@@ -1643,80 +1515,70 @@ object Queries {
          |--CLUSTER BY cid --cluster by preceded by group by is silently ignored by hive but fails in spark
          |--no total ordering with ORDER BY required, further processed by clustering algorithm
          |ORDER BY cid
-       """.stripMargin)
-
-    data.cache()
-
-    // step 2: Calculating KMeans with spark (DataFrame)
-    var options = Map(
-      'iter -> "20"
-    )
-    import spark.implicits._
-
-    // vectorize all columns except the first column
-    // (a, b, c, d, e) => (a, [b, c, d, e])
-    val assembler = new VectorAssembler()
-      .setInputCols(data.columns.tail)
-      .setOutputCol("features")
-
-    val kmeans = new KMeans()
-      .setFeaturesCol(assembler.getOutputCol)
-      .setK(q25_numcluster.toInt)
-      .setMaxIter(options('iter).toInt)
-      .setInitMode("k-means||")
-      .setSeed(1234567890)
-
-    val pipeline = new Pipeline()
-      .setStages(Array(assembler, kmeans))
-
-    val model = pipeline.fit(data)
-
-    // result of the transformation and clustering
-    val predictions = model.transform(data)
-
-    // Evaluate clustering by computing Silhouette score
-    val evaluator = new ClusteringEvaluator()
-
-    val silhouette = evaluator.evaluate(predictions)
-
-    // get the KMeansModel for meta information
-    // Evaluate clusterModel by computing Within Set Sum of Squared Errors
-    val kMeansModel = model.stages(1).asInstanceOf[KMeansModel]
-    val clusterCenters = kMeansModel.clusterCenters
-
-    //print and write clustering  metadata
-    val metaInformation =
-      s"""Clusters:
          |
-         |Number of Clusters: ${clusterCenters.length}
-         |silhouette: $silhouette
-         |${clusterCenters.mkString("\n")}
-       """.stripMargin
-    println(metaInformation)
+         |""".stripMargin
 
-    // step 3: clean
-    data.unpersist()
-    spark.catalog.dropTempView(tmp_tbl)
+    if (! debug) {
+      val data = spark.sql(queryContent)
+      data.cache()
 
+      // step 2: Calculating KMeans with spark (DataFrame)
+      var options = Map(
+        'iter -> "20"
+      )
+      import spark.implicits._
+
+      // vectorize all columns except the first column
+      // (a, b, c, d, e) => (a, [b, c, d, e])
+      val assembler = new VectorAssembler()
+        .setInputCols(data.columns.tail)
+        .setOutputCol("features")
+
+      val kmeans = new KMeans()
+        .setFeaturesCol(assembler.getOutputCol)
+        .setK(q25_numcluster.toInt)
+        .setMaxIter(options('iter).toInt)
+        .setInitMode("k-means||")
+        .setSeed(1234567890)
+
+      val pipeline = new Pipeline()
+        .setStages(Array(assembler, kmeans))
+
+      val model = pipeline.fit(data)
+
+      // result of the transformation and clustering
+      val predictions = model.transform(data)
+
+      // Evaluate clustering by computing Silhouette score
+      val evaluator = new ClusteringEvaluator()
+
+      val silhouette = evaluator.evaluate(predictions)
+
+      // get the KMeansModel for meta information
+      // Evaluate clusterModel by computing Within Set Sum of Squared Errors
+      val kMeansModel = model.stages(1).asInstanceOf[KMeansModel]
+      val clusterCenters = kMeansModel.clusterCenters
+
+      //print and write clustering  metadata
+      val metaInformation =
+        s"""Clusters:
+           |
+           |Number of Clusters: ${clusterCenters.length}
+           |silhouette: $silhouette
+           |${clusterCenters.mkString("\n")}
+   """.stripMargin
+      println(metaInformation)
+
+      // step 3: clean
+      data.unpersist()
+      spark.catalog.dropTempView(tmp_tbl)
+    }
+    expose_logical_plan(spark, 25, queryContent, header)
   }
 
   val run_q26 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
-
-    // [reversed] i1 x i2 = 5 x 8
-    val (i1, i2) = parse_vid(26, vid)
-    val q26_i_category_IN = q26_i_category_IN_list(i1)
-    val q26_numcluster : String = q26_numcluster_list(i2)
-
-    println(s"The default paramters for template 26 are: q26_i_category_IN = ${q26_i_category_IN_list(0)}, " +
-      s"q26_numcluster = ${q26_numcluster_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q26_i_category_IN = $q26_i_category_IN, q26_numcluster = $q26_numcluster")
-    }
-
-    // step 1: extract the input data
-    val data = spark.sql(
+    val (q26_i_category_IN, q26_numcluster) = q26_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT
          |  ss.ss_customer_sk AS cid,
@@ -1745,79 +1607,73 @@ object Queries {
          |HAVING count(ss.ss_item_sk) > ${q26_count_ss_item_sk}
          |--CLUSTER BY cid --cluster by preceded by group by is silently ignored by hive but fails in spark
          |ORDER BY cid
-       """.stripMargin)
+        |""".stripMargin
 
-    data.cache()
+    if (!debug) {
+      // step 1: extract the input data
+      val data = spark.sql(queryContent)
+      data.cache()
 
-    // step 2: Calculating KMeans with spark (DataFrame)
-    var options = Map(
-      'iter -> "20"
-    )
-    import spark.implicits._
+      // step 2: Calculating KMeans with spark (DataFrame)
+      var options = Map(
+        'iter -> "20"
+      )
+      import spark.implicits._
 
-    // vectorize all columns except the first column
-    // (a, b, c, d, e) => (a, [b, c, d, e])
-    val assembler = new VectorAssembler()
-      .setInputCols(data.columns.tail)
-      .setOutputCol("features")
+      // vectorize all columns except the first column
+      // (a, b, c, d, e) => (a, [b, c, d, e])
+      val assembler = new VectorAssembler()
+        .setInputCols(data.columns.tail)
+        .setOutputCol("features")
 
-    val kmeans = new KMeans()
-      .setFeaturesCol(assembler.getOutputCol)
-      .setK(q26_numcluster.toInt)
-      .setMaxIter(options('iter).toInt)
-      .setInitMode("k-means||")
-      .setSeed(1234567890)
+      val kmeans = new KMeans()
+        .setFeaturesCol(assembler.getOutputCol)
+        .setK(q26_numcluster.toInt)
+        .setMaxIter(options('iter).toInt)
+        .setInitMode("k-means||")
+        .setSeed(1234567890)
 
-    val pipeline = new Pipeline()
-      .setStages(Array(assembler, kmeans))
+      val pipeline = new Pipeline()
+        .setStages(Array(assembler, kmeans))
 
-    val model = pipeline.fit(data)
+      val model = pipeline.fit(data)
 
-    // result of the transformation and clustering
-    val predictions = model.transform(data)
+      // result of the transformation and clustering
+      val predictions = model.transform(data)
 
-    // Evaluate clustering by computing Silhouette score
-    val evaluator = new ClusteringEvaluator()
+      // Evaluate clustering by computing Silhouette score
+      val evaluator = new ClusteringEvaluator()
 
-    val silhouette = evaluator.evaluate(predictions)
+      val silhouette = evaluator.evaluate(predictions)
 
-    // get the KMeansModel for meta information
-    val kMeansModel = model.stages(1).asInstanceOf[KMeansModel]
+      // get the KMeansModel for meta information
+      val kMeansModel = model.stages(1).asInstanceOf[KMeansModel]
 
-    // Evaluate clusterModel by computing Within Set Sum of Squared Errors
-    val clusterCenters = kMeansModel.clusterCenters
+      // Evaluate clusterModel by computing Within Set Sum of Squared Errors
+      val clusterCenters = kMeansModel.clusterCenters
 
-    //print and write clustering  metadata
-    val metaInformation =
-      s"""Clusters:
-         |
-         |Number of Clusters: ${clusterCenters.length}
-         |silhouette: $silhouette
-         |${clusterCenters.mkString("\n")}
-       """.stripMargin
-    println(metaInformation)
+      //print and write clustering  metadata
+      val metaInformation =
+        s"""Clusters:
+           |
+           |Number of Clusters: ${clusterCenters.length}
+           |silhouette: $silhouette
+           |${clusterCenters.mkString("\n")}
+   """.stripMargin
+      println(metaInformation)
 
-    // clean
-    data.unpersist()
+      // clean
+      data.unpersist()
+    }
+    expose_logical_plan(spark, 26, queryContent, header)
   }
 
   val run_q27 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // [reversed] i1 x i2 = 5 x 8
-    val (i1, i2) = parse_vid(27, vid)
-    val q27_pr_item_sk = q27_pr_item_sk_list(i1)
-    val q27_limit = q27_limit_list(i2)
-
-    println(s"The default paramters for template 27 are: q27_pr_item_sk = ${q27_pr_item_sk_list(0)}, " +
-      s"q27_limit by default = None")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q27_pr_item_sk = $q27_pr_item_sk, q27_limit = $q27_limit")
-    }
+    val q27_pr_item_sk = q27_pr_item_sk_list(vid - 1)
 
     spark.sql("CREATE TEMPORARY FUNCTION find_company AS 'io.bigdatabenchmark.v1.queries.q27.CompanyUDF'")
-    spark.sql(
+    val queryContent =
       s"""
          |SELECT review_sk, item_sk, company_name, review_sentence
          |FROM ( --wrap in additional FROM(), because sorting/distribute by with UDTF in select clause is not allowed
@@ -1830,43 +1686,18 @@ object Queries {
          |  ) subtable
          |) extracted
          |ORDER BY review_sk, item_sk, company_name, review_sentence
-         |${if (i2 > 0) s"LIMIT $q27_limit" else ""}
-       """.stripMargin).collect()
+        |""".stripMargin
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 27, queryContent, header)
 
     // clean
     spark.sql("DROP TEMPORARY FUNCTION find_company")
   }
 
   val run_q28 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
-
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(28, vid)
-    val q28_lambda : String = q28_lambda_list(i1)
-    val q28_additional_time_pressure_rate = q28_additional_time_pressure_rate_list(i2)
-
-    println(s"The default paramters for template 28 are: q28_lambda by default is = ${q28_lambda_list(0)}, " +
-      s"q28_additional_time_pressure_rate by default = ${q28_additional_time_pressure_rate_list(0)}")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q28_lambda = $q28_lambda, " +
-        s"q28_additional_time_pressure_rate = $q28_additional_time_pressure_rate")
-    }
-
-    // step 1: extract the input data
-    val inputTrain = spark.sql(s"""
-         |SELECT pr_review_sk AS pr_review_sk, pr_review_rating AS pr_rating, pr_review_content AS pr_review_content
-         |FROM (
-         |  SELECT
-         |    pr_review_sk,
-         |    pr_review_rating,
-         |    pr_review_content
-         |  FROM product_reviews
-         |  ORDER BY pr_review_sk
-         |)
-         |WHERE pmod(pr_review_sk, 10) IN (1,2,3,4,5,6,7,8,9) -- 90% are training
-         |""".stripMargin)
-    val inputTest = spark.sql(
+    val (q28_lambda, q28_pr_review_rating_IN) = q28_list(vid - 1)
+    val queryContent =
       s"""
          |SELECT pr_review_sk AS pr_review_sk, pr_review_rating AS pr_rating, pr_review_content AS pr_review_content
          |FROM (
@@ -1875,225 +1706,192 @@ object Queries {
          |    pr_review_rating,
          |    pr_review_content
          |  FROM product_reviews
+         |  where pr_review_rating IN (${q28_pr_review_rating_IN})
          |  ORDER BY pr_review_sk
          |)
-         |WHERE pmod(pr_review_sk, 10) IN (0) -- 10% are testing
-         |""".stripMargin)
-
-    // step 2: Train and Test Naive Bayes Classifier with spark Dataframe
-
-//    var options = Map('lambda -> "0")
-    import spark.implicits._
-    def ratingToDoubleLabel(label: Int): Double = {
-      label match {
-        case 1 => 0.0
-        case 2 => 0.0
-        case 3 => 1.0
-        case 4 => 2.0
-        case 5 => 2.0
-        case _ => 1.0
-      }
-    }
-
-    val transformRating = udf((r : Int) => ratingToDoubleLabel(r))
-    val trainingData = inputTrain.withColumn("sentiment", transformRating($"pr_rating")).cache()
-    val testingData = inputTest.withColumn("sentiment", transformRating($"pr_rating")).cache()
-
-    // set up pipeline
-    val tokenizer = new Tokenizer()
-      .setInputCol("pr_review_content")
-      .setOutputCol("words")
-
-    val hashingTF = new HashingTF()
-      .setInputCol(tokenizer.getOutputCol)
-      .setOutputCol("rawFeature")
-
-    val idf = new IDF()
-      .setInputCol(hashingTF.getOutputCol)
-      .setOutputCol("feature")
-
-    val naiveBayes = new NaiveBayes()
-      .setSmoothing(q28_lambda.toDouble)
-      .setFeaturesCol(idf.getOutputCol)
-      .setLabelCol("sentiment")
-      .setModelType("multinomial")
-
-    val pipeline = new Pipeline()
-      .setStages(Array(tokenizer, hashingTF, idf, naiveBayes))
-
-    // ---> testing time pressure
-    val training_start_time : Long = System.currentTimeMillis
-
-    // train the model (Tokenize -> TF/IDF -> Naive Bayes)
-    val model = pipeline.fit(trainingData)
-
-    // ---> testing time pressure
-    val training_end_time : Long = System.currentTimeMillis
-
-    // TODO ---> add different time pressure here
-
-    def factorial(n:BigInt):BigInt = if (n==0) 1 else n * factorial(n-1)
-
-    val training_duration = training_end_time - training_start_time
-    println(s"---> trianing time: $training_duration ms")
-    val additional_time_pressure = (training_duration * q28_additional_time_pressure_rate).toLong
-    val additional_pressure_start : Long = System.currentTimeMillis
-    while(System.currentTimeMillis - additional_pressure_start < additional_time_pressure) {
-      factorial(100)
-    }
-
-    println("Testing NaiveBayes model")
-    // get the predictions
-    val prediction : DataFrame = model.transform(testingData).cache()
-
-    // calculate metrics
-    val predictionAndLabel = prediction
-      .select($"prediction", $"sentiment")
-      .rdd.map({case Row(prediction: Double, sentiment: Double) => prediction -> sentiment})
-    val multMetrics = new MulticlassMetrics(predictionAndLabel)
-
-    val prec = multMetrics.weightedPrecision
-    val acc = multMetrics.accuracy
-    val confMat = multMetrics.confusionMatrix
-
-    //calculate Metadata about created model
-    val metaInformation=
-      s"""Precision: $prec
-         |Accuracy: $acc
-         |Confusion Matrix:
-         |$confMat
          |""".stripMargin
 
-    println(metaInformation)
+    if (! debug) {
+      // step 1: extract the input data
+      val inputTrain = spark.sql(
+        s"""
+          |$queryContent
+          |WHERE pmod(pr_review_sk, 10) IN (1,2,3,4,5,6,7,8,9) -- 90% are training
+          |""".stripMargin)
+      val inputTest = spark.sql(
+        s"""
+           |$queryContent
+           |WHERE pmod(pr_review_sk, 10) IN (0) -- 10% are testing
+           |""".stripMargin)
 
-    // clean
-    inputTrain.unpersist()
-    inputTest.unpersist()
-    prediction.unpersist()
+      // step 2: Train and Test Naive Bayes Classifier with spark Dataframe
 
+      //    var options = Map('lambda -> "0")
+      import spark.implicits._
+      def ratingToDoubleLabel(label: Int): Double = {
+        label match {
+          case 1 => 0.0
+          case 2 => 0.0
+          case 3 => 1.0
+          case 4 => 2.0
+          case 5 => 2.0
+          case _ => 1.0
+        }
+      }
+
+      val transformRating = udf((r: Int) => ratingToDoubleLabel(r))
+      val trainingData = inputTrain.withColumn("sentiment", transformRating($"pr_rating")).cache()
+      val testingData = inputTest.withColumn("sentiment", transformRating($"pr_rating")).cache()
+
+      // set up pipeline
+      val tokenizer = new Tokenizer()
+        .setInputCol("pr_review_content")
+        .setOutputCol("words")
+
+      val hashingTF = new HashingTF()
+        .setInputCol(tokenizer.getOutputCol)
+        .setOutputCol("rawFeature")
+
+      val idf = new IDF()
+        .setInputCol(hashingTF.getOutputCol)
+        .setOutputCol("feature")
+
+      val naiveBayes = new NaiveBayes()
+        .setSmoothing(q28_lambda.toDouble)
+        .setFeaturesCol(idf.getOutputCol)
+        .setLabelCol("sentiment")
+        .setModelType("multinomial")
+
+      val pipeline = new Pipeline()
+        .setStages(Array(tokenizer, hashingTF, idf, naiveBayes))
+
+      // train the model (Tokenize -> TF/IDF -> Naive Bayes)
+      val model = pipeline.fit(trainingData)
+
+      println("Testing NaiveBayes model")
+      // get the predictions
+      val prediction: DataFrame = model.transform(testingData).cache()
+
+      // calculate metrics
+      val predictionAndLabel = prediction
+        .select($"prediction", $"sentiment")
+        .rdd.map({ case Row(prediction: Double, sentiment: Double) => prediction -> sentiment })
+      val multMetrics = new MulticlassMetrics(predictionAndLabel)
+
+      val prec = multMetrics.weightedPrecision
+      val acc = multMetrics.accuracy
+      val confMat = multMetrics.confusionMatrix
+
+      //calculate Metadata about created model
+      val metaInformation =
+        s"""Precision: $prec
+           |Accuracy: $acc
+           |Confusion Matrix:
+           |$confMat
+           |""".stripMargin
+
+      println(metaInformation)
+
+      // clean
+      inputTrain.unpersist()
+      inputTest.unpersist()
+      prediction.unpersist()
+    }
+    expose_logical_plan(spark, 28, queryContent, header)
   }
 
   val run_q29 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
-
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(29, vid)
-    val q29_limit = q29_limit_list(i1)
-    val q29_ws_quantity_upper = q29_ws_quantity_upper_list(i2)
-
-    println(s"The default paramters for template 29 are: q29_limit = ${q29_limit_list(0)}, " +
-      s"q29_ws_quantity_upper by default = None")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q29_limit = $q29_limit, q29_ws_quantity_upper = $q29_ws_quantity_upper")
-    }
-
+    val q29_i_category_id_IN = q29_i_category_id_IN_list(vid - 1)
     spark.sql("CREATE TEMPORARY FUNCTION makePairs AS 'io.bigdatabenchmark.v1.queries.udf.PairwiseUDTF'")
 
-
-    // TODO add a type filter for web_sales
-    spark.sql(
+    val queryContent =
       s"""
-         |SELECT category_id_1, category_id_2, COUNT (*) AS cnt
-         |FROM (
-         |  -- Make category "purchased together" pairs
-         |  -- combining collect_set + sorting + makepairs(array, noSelfParing)
-         |  -- ensures we get no pairs with swapped places like: (12,24),(24,12).
-         |  -- We only produce tuples (12,24) ensuring that the smaller number is always on the left side
-         |  SELECT makePairs(sort_array(itemArray), false) AS (category_id_1,category_id_2)
-         |  FROM (
-         |    SELECT collect_set(i_category_id) as itemArray --(_list= with duplicates, _set = distinct)
-         |    FROM web_sales ws, item i
-         |    WHERE ws.ws_item_sk = i.i_item_sk
-         |    ${if (i2 > 0) s"AND ws.ws_quantity < ${q29_ws_quantity_upper}" else ""}
-         |    AND i.i_category_id IS NOT NULL
-         |    GROUP BY ws_order_number
-         |  ) collectedList
-         |) pairs
-         |GROUP BY category_id_1, category_id_2
-         |ORDER BY cnt DESC, category_id_1, category_id_2
-         |LIMIT ${q29_limit}
-       """.stripMargin).collect()
+        |SELECT category_id_1, category_id_2, COUNT (*) AS cnt
+        |FROM (
+        |  -- Make category "purchased together" pairs
+        |  -- combining collect_set + sorting + makepairs(array, noSelfParing)
+        |  -- ensures we get no pairs with swapped places like: (12,24),(24,12).
+        |  -- We only produce tuples (12,24) ensuring that the smaller number is always on the left side
+        |  SELECT makePairs(sort_array(itemArray), false) AS (category_id_1,category_id_2)
+        |  FROM (
+        |    SELECT collect_set(i_category_id) as itemArray --(_list= with duplicates, _set = distinct)
+        |    FROM web_sales ws, item i
+        |    WHERE ws.ws_item_sk = i.i_item_sk
+        |    -- AND i.i_category_id IS NOT NULL
+        |    AND i.i_category_id in (${q29_i_category_id_IN})
+        |    GROUP BY ws_order_number
+        |  ) collectedList
+        |) pairs
+        |GROUP BY category_id_1, category_id_2
+        |ORDER BY cnt DESC, category_id_1, category_id_2
+        |LIMIT ${q29_limit}
+        |""".stripMargin
 
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 29, queryContent, header)
     // clean
     spark.sql("DROP TEMPORARY FUNCTION makePairs")
-
   }
 
   val run_q30 = (spark: SparkSession, vid: Int, header: String, debug: Boolean) => {
 
-    // i1 x i2 = 8 x 5
-    val (i1, i2) = parse_vid(30, vid)
-    val q30_limit = q30_limit_list(i1)
-    val q30_wcs_click_date_upper = q30_wcs_click_date_upper_list(i2)
-
-    println(s"The default paramters for template 30 are: q30_limit = ${q30_limit_list(0)}, " +
-      s"q30_wcs_click_date_upper by default = None")
-    if (vid == 0) {
-      println(s"---> Current: IS default parameters!")
-    } else {
-      println(s"---> Current: q30_limit = $q30_limit, q30_wcs_click_date_upper = $q30_wcs_click_date_upper")
-    }
-
+    val q30_session_timeout_inSec = q30_session_timeout_inSec_list(vid - 1)
     spark.sql("CREATE TEMPORARY FUNCTION makePairs AS 'io.bigdatabenchmark.v1.queries.udf.PairwiseUDTF'")
 
     val tmp_tbl = "tmp_tbl"
 
-    // TODO add a filter (timestamp) for web_clickstreams --> half half
-    val tmp_df = spark.sql(
+    val queryContent =
       s"""
-         |SELECT *
-         |FROM (
-         |  FROM (
-         |    SELECT wcs_user_sk,
-         |      (wcs_click_date_sk*24L*60L*60L + wcs_click_time_sk) AS tstamp_inSec,
-         |      i_category_id
-         |    FROM web_clickstreams wcs, item i
-         |    WHERE wcs.wcs_item_sk = i.i_item_sk
-         |    ${if (i2 > 0) s"AND wcs.wcs_click_date_sk <= ${q30_wcs_click_date_upper}" else ""}
-         |    AND i.i_category_id IS NOT NULL
-         |    AND wcs.wcs_user_sk IS NOT NULL
-         |    --Hive uses the columns in Distribute By to distribute the rows among reducers. All rows with the same Distribute By columns will go to the same reducer. However, Distribute By does not guarantee clustering or sorting properties on the distributed keys.
-         |    DISTRIBUTE BY wcs_user_sk SORT BY wcs_user_sk, tstamp_inSec, i_category_id -- "sessionize" reducer script requires the cluster by uid and sort by tstamp ASCENDING
-         |  ) clicksAnWebPageType
-         |  REDUCE
-         |    wcs_user_sk,
-         |    tstamp_inSec,
-         |    i_category_id
-         |  USING 'python q30-sessionize.py ${q30_session_timeout_inSec}'
-         |  AS (
-         |    category_id BIGINT,
-         |    sessionid STRING
-         |  )
-         |) q02_tmp_sessionize
-         |Cluster by sessionid
-       """.stripMargin)
-    tmp_df.createOrReplaceTempView(tmp_tbl)
+        |with ${tmp_tbl} as (
+        |SELECT *
+        |FROM (
+        |  FROM (
+        |    SELECT wcs_user_sk,
+        |      (wcs_click_date_sk*24L*60L*60L + wcs_click_time_sk) AS tstamp_inSec,
+        |      i_category_id
+        |    FROM web_clickstreams wcs, item i
+        |    WHERE wcs.wcs_item_sk = i.i_item_sk
+        |    AND i.i_category_id IS NOT NULL
+        |    AND wcs.wcs_user_sk IS NOT NULL
+        |    --Hive uses the columns in Distribute By to distribute the rows among reducers. All rows with the same Distribute By columns will go to the same reducer. However, Distribute By does not guarantee clustering or sorting properties on the distributed keys.
+        |    DISTRIBUTE BY wcs_user_sk SORT BY wcs_user_sk, tstamp_inSec, i_category_id -- "sessionize" reducer script requires the cluster by uid and sort by tstamp ASCENDING
+        |  ) clicksAnWebPageType
+        |  REDUCE
+        |    wcs_user_sk,
+        |    tstamp_inSec,
+        |    i_category_id
+        |  USING 'python q30-sessionize.py ${q30_session_timeout_inSec}'
+        |  AS (
+        |    category_id BIGINT,
+        |    sessionid STRING
+        |  )
+        |) q02_tmp_sessionize
+        |Cluster by sessionid
+        |)
+        |
+        |SELECT  category_id_1, category_id_2, COUNT (*) AS cnt
+        |FROM (
+        |  -- Make category "viewed together" pairs
+        |  -- combining collect_set + sorting + makepairs(array, noSelfParing)
+        |  -- ensures we get no pairs with swapped places like: (12,24),(24,12).
+        |  -- We only produce tuples (12,24) ensuring that the smaller number is always on the left side
+        |  SELECT makePairs(sort_array(itemArray), false) AS (category_id_1,category_id_2)
+        |  FROM (
+        |    SELECT collect_set(category_id) as itemArray --(_list= with duplicates, _set = distinct)
+        |    FROM ${tmp_tbl}
+        |    GROUP BY sessionid
+        |  ) collectedList
+        |) pairs
+        |GROUP BY category_id_1, category_id_2
+        |ORDER BY cnt DESC, category_id_1, category_id_2
+        |LIMIT ${q30_limit}
+        |""".stripMargin
 
-    spark.sql(
-      s"""
-         |SELECT  category_id_1, category_id_2, COUNT (*) AS cnt
-         |FROM (
-         |  -- Make category "viewed together" pairs
-         |  -- combining collect_set + sorting + makepairs(array, noSelfParing)
-         |  -- ensures we get no pairs with swapped places like: (12,24),(24,12).
-         |  -- We only produce tuples (12,24) ensuring that the smaller number is always on the left side
-         |  SELECT makePairs(sort_array(itemArray), false) AS (category_id_1,category_id_2)
-         |  FROM (
-         |    SELECT collect_set(category_id) as itemArray --(_list= with duplicates, _set = distinct)
-         |    FROM ${tmp_tbl}
-         |    GROUP BY sessionid
-         |  ) collectedList
-         |) pairs
-         |GROUP BY category_id_1, category_id_2
-         |ORDER BY cnt DESC, category_id_1, category_id_2
-         |LIMIT ${q30_limit}
-       """.stripMargin).collect()
-
-    // clean
-    spark.catalog.dropTempView(tmp_tbl)
+    if (!debug)
+      spark.sql(queryContent).collect()
+    expose_logical_plan(spark, 30, queryContent, header)
     spark.sql("DROP TEMPORARY FUNCTION makePairs")
   }
-
 
 }
