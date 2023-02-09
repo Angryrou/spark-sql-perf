@@ -133,13 +133,14 @@ object Paras {
   ) yield (i, j)
 
   //  Q11
-  val q11_startDate_list = List("2003-01-02", "2003-02-02", "2003-03-02", "2003-04-02", "2003-05-02",
-    "2003-06-02", "2003-07-02", "2003-08-02", "2003-09-02", "2003-10-02")
+  val q11_year_list = 2003 to 2008
+  val q11_month_list = 1 to 10
   val q11_month_gap = 1 to 2
   val q11_list = for (
-    i <- q11_startDate_list;
-    j <- q11_month_gap
-  ) yield (i, i.slice(0, 5) + (i.split("-")(1).toInt + j).toString + i.slice(7, 10))
+    y <- q11_year_list;
+    m <- q11_month_list;
+    g <- q11_month_gap
+  ) yield (f"${y}-${m}%02d-02", f"${y}-${m + g}%02d-02")
 
   //  Q12
   val q12_i_category_IN_list = i_categories.combinations(3).map(_.map(x => s"'${x}'").mkString(",")).toList ++
